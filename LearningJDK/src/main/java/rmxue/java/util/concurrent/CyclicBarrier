@@ -1,0 +1,4 @@
+    用于一组线程互相等待协作的拦截器。CyclicBarriers对于涉及固定数量线程互相等待是有效的。Barrier之所以是Cyclic是因为在所有现成
+被释放之后Barrier可以被再次使用。
+    CyclicBarriers支持传入一个Runnable，在每次到达Barrier Point后执行，在最后一个线程到达之后，在任何线程被释放之前。在任何线程
+继续自己后面的动作之前使用Barrier Action对共享资源进行更新。
