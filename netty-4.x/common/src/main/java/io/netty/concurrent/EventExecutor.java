@@ -1,5 +1,10 @@
 package io.netty.concurrent;
 
+/**
+ * EventExecutor存在理由：
+ * 1. 返回自己对自己的引用及归属的池即EventExecutorGroup
+ * 2. 判断调用线程是否是EventExecutor绑定的线程
+ */
 public interface EventExecutor extends EventExecutorGroup {
     /**
      * Override {@link EventExecutorGroup}的{@linkplain #next()};
@@ -51,7 +56,7 @@ public interface EventExecutor extends EventExecutorGroup {
      * @param <V>
      * @return
      */
-    <V> Future<V> newSucceededFuture();
+    <V> Future<V> newSucceededFuture(V result);
 
     /**
      * 1. 一个被设置为失败的Future
@@ -62,5 +67,5 @@ public interface EventExecutor extends EventExecutorGroup {
      * @param <V>
      * @return
      */
-    <V> Future<V> newFailedFuture();
+    <V> Future<V> newFailedFuture(Throwable cause);
 }

@@ -10,6 +10,10 @@ import java.util.concurrent.TimeUnit;
  * EventExecutorGroup承担两个角色：
  * 1. 通过next方法提供EventExecutor
  * 2. 负责处理EventExecutor的生命周期
+ * <p>
+ * EventExecutorGroup存在的理由：
+ * 1. 可以进行优雅的关闭，关闭之前存在静默期
+ * 2. 执行返回的Future是自定义的Future
  */
 public interface EventExecutorGroup extends ScheduledExecutorService, Iterable<EventExecutor> {
     /**
