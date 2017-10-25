@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="buffer" />
+        <module name="common" />
+        <module name="netty-buffer" />
+        <module name="netty-common" />
+        <module name="transport" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="buffer" target="1.5" />
+      <module name="common" target="1.7" />
+      <module name="netty-4.x" target="1.5" />
+      <module name="netty-buffer" target="1.5" />
+      <module name="netty-common" target="1.5" />
+      <module name="transport" target="1.5" />
+    </bytecodeTargetLevel>
+  </component>
+</project>
