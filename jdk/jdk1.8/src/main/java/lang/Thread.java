@@ -1,4 +1,4 @@
-package rmxue.java.lang;
+package java.lang;
 
 /**
  * Created by xuecy on 2017/7/20.

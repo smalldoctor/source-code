@@ -1,4 +1,4 @@
-package rmxue.java.util.concurrent.atomic;
+package java.util.concurrent.atomic;
 
 import sun.misc.Contended;
 

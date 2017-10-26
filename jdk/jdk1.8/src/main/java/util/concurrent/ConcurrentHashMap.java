@@ -1,4 +1,4 @@
-package rmxue.java.util.concurrent;
+package java.util.concurrent;
 
 import sun.misc.Contended;
 import sun.misc.Unsafe;

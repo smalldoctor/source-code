@@ -1,4 +1,4 @@
-package rmxue.java.util.concurrent.locks;
+package java.util.concurrent.locks;
 
 import sun.misc.Unsafe;
 

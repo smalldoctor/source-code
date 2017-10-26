@@ -1,4 +1,4 @@
-package rmxue.java.lang;
+package java.lang;
 
 /**
  * @Author: xuecy

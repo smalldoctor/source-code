@@ -1,4 +1,4 @@
-package rmxue.java.nio.channels;
+package java.nio.channels;
 
 /**
  * @Author: xuecy
@@ -9,7 +9,7 @@ package rmxue.java.nio.channels;
  * @Email: xuecy@live.com
  */
 
-import rmxue.java.nio.ByteBuffer;
+import java.nio.ByteBuffer;
 
 import java.io.IOException;
 

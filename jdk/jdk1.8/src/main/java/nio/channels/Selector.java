@@ -1,4 +1,4 @@
-package rmxue.java.nio.channels;
+package java.nio.channels;
 
 import java.io.IOException;
 

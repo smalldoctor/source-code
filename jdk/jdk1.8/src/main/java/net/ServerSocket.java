@@ -1,4 +1,4 @@
-package rmxue.java.net;
+package java.net;
 
 import java.io.IOException;
 

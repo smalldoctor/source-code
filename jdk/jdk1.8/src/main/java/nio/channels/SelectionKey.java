@@ -1,4 +1,4 @@
-package rmxue.java.nio.channels;
+package java.nio.channels;
 
 /**
  * @Author: xuecy

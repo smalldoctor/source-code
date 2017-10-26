@@ -1,4 +1,4 @@
-package rmxue.java.util.concurrent.locks;
+package java.util.concurrent.locks;
 
 import java.util.Date;
 import java.util.concurrent.TimeUnit;

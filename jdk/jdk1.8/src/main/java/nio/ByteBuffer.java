@@ -1,4 +1,4 @@
-package rmxue.java.nio;
+package java.nio;
 
 /**
  * @Author: xuecy
