@@ -14,8 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.PropertyPermission;
 
-import static com.sun.corba.se.impl.orbutil.ORBClassLoader.getClassLoader;
-
 /**
  * A Digester processes an XML input stream by matching a series of
  * element nesting patterns to execute Rules that have been added prior to the start of parsing.

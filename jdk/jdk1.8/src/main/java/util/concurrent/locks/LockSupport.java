@@ -52,7 +52,9 @@ public class LockSupport {
     }
 
     /**
-     * @param thread
+     * Unpark指定的线程；
+     *
+     * @param thread 如果是null，则不做任何处理
      */
     public static void unpark(Thread thread) {
         if (thread != null) {
