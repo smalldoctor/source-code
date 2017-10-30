@@ -6,7 +6,8 @@ package java.util.concurrent;
  * 已经完成的任务不可以取消或者重启；但是可以通过runAndReset的方法重启；
  * @param <V>
  */
-public class FutureTask<V> implements RunnableFuture {
+public class FutureTask<V> implements RunnableFuture<V> {
+
     @Override
     public void run() {
 
@@ -28,12 +29,12 @@ public class FutureTask<V> implements RunnableFuture {
     }
 
     @Override
-    public Object get() throws InterruptedException, ExecutionException {
+    public V get() throws InterruptedException, ExecutionException {
         return null;
     }
 
     @Override
-    public Object get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+    public V get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
         return null;
     }
 }
