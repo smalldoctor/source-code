@@ -29,5 +29,5 @@ package java.util.concurrent;
  * }}</pre>
  *
  */
-public interface Future {
+public interface Future<V> {
 }
