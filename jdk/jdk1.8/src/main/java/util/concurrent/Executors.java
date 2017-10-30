@@ -20,25 +20,33 @@ package java.util.concurrent;
  */
 public class Executors {
     //-------------------------------------------------  Static Methods
+
+    /**
+     * @param runnable
+     * @param result
+     * @param <T>
+     * @return
+     * @throws NullPointerException 当Runnable是null时
+     */
     public static <T> Callable<T> callable(Runnable runnable, T result) {
-        if (result == null)
+        if (runnable == null)
             throw new NullPointerException();
         return new RunnableAdapter<T>(runnable, result);
     }
 
     //-------------------------------------------------  Static Classes
     static class RunnableAdapter<T> implements Callable<T> {
-        final Runnable runnable;
+        final Runnable task;
         final T result;
 
         public RunnableAdapter(Runnable runnable, T value) {
-            this.runnable = runnable;
+            this.task = runnable;
             this.result = value;
         }
 
         @Override
         public T call() {
-            this.runnable.run();
+            this.task.run();
             return this.result;
         }
     }

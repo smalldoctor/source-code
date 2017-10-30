@@ -36,6 +36,6 @@ public abstract class AbstractExecutorService implements ExecutorService {
      * @return
      */
     protected <T> RunnableFuture<T> newTaskFor(Runnable runnable, T value) {
-        return null;
+        return new FutureTask<T>(runnable, value);
     }
 }
