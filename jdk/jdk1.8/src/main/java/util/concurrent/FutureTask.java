@@ -93,6 +93,9 @@ public class FutureTask<V> implements RunnableFuture<V> {
         if (s >= CANCELLED) {
             throw new CancellationException();
         }
+        /**
+         * 如果是状态是NEW时，那么outCome是null，则不存在类型转换的异常
+         */
         throw new ExecutionException((Throwable) x);
     }
 
@@ -189,7 +192,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
     public V get() throws InterruptedException, ExecutionException {
         int s = state;
         if (s <= COMPLETING) {
-            // TODO
+            s = awaitDone(false, 0L);
         }
         return report(s);
     }
@@ -201,11 +204,68 @@ public class FutureTask<V> implements RunnableFuture<V> {
      */
     private int awaitDone(boolean timed, long nanos) throws InterruptedException {
         final long deadline = timed ? System.currentTimeMillis() + nanos : 0L;
+        // 代表当前线程
+        WaitNode q = null;
+        boolean queued = false;
         for (; ; ) {
-            // 因为task尚未完成，因此当前线程在阻塞等待完成
+            /**
+             * {@link LockSupport#park()}在阻塞被中断时是不会抛出异常的；
+             * 因此需要自己检查异常
+             * 因为task尚未完成，因此当前线程在阻塞等待完成
+             */
             if (Thread.interrupted()) {
-                // TODO
+                removeWaiter(q);
+                throw new InterruptedException();
+            }
+            int s = state;
+            if (s > COMPLETING) {
+                // task已经完成
+            } else if (s == COMPLETING) {
+                // task正在进行赋值处理
+            } else if (q == null) {
+                q = new WaitNode();
+            } else if (!queued) {
+                // 将当前线程存放在队列的头
+                queued = UNSAFE.compareAndSwapObject(this, waitersOffset, q.next = waiters, q);
+            } else if (timed) {
+                nanos = deadline - System.currentTimeMillis();
+                if (nanos <= 0) {
+                    removeWaiter(q);
+                    return state;
+                }
+                LockSupport.parkNanos(this, nanos);
+            } else {
+                LockSupport.park(this);
+            }
+        }
+    }
 
+    private void removeWaiter(WaitNode node) {
+        if (node != null) {
+            node.thread = null;
+            /**
+             * 移除算法：
+             * 通过将代表当前线程的WaitNode的thread置为空，然后
+             * 遍历waiters,将所有thread == null的WaitNode从栈中删除
+             */
+            retry:
+            for (; ; ) {
+                for (WaitNode pred = null, q = waiters, s; q != null; q = s) {
+                    // 后继节点
+                    s = q.next;
+                    if (q.thread != null) {
+                        pred = q;
+                    } else if (pred != null) {
+                        pred.next = s;
+                        if (pred.thread == null) { // removeWaiter race
+                            continue retry;
+                        }
+                    } else if (!UNSAFE.compareAndSwapObject(this, waitersOffset, q, s)) {
+                        // 第一个节点可能是空的
+                        continue retry;
+                    }
+                }
+                break;
             }
         }
     }
