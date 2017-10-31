@@ -1,6 +1,5 @@
 package java.util.concurrent;
 
-import com.sun.xml.internal.bind.v2.TODO;
 
 import java.util.concurrent.locks.LockSupport;
 
@@ -138,6 +137,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
             if (UNSAFE.compareAndSwapObject(this, waitersOffset, q, null)) {
                 for (; ; ) {
                     Thread t = q.thread;
+                    // 存在awaitDone方法会将WaitNode的thread置为空，留给其他线程处理的场景
                     if (t != null) {
                         q.thread = null;
                         LockSupport.unpark(t);
@@ -217,13 +217,24 @@ public class FutureTask<V> implements RunnableFuture<V> {
                 removeWaiter(q);
                 throw new InterruptedException();
             }
+            // 尽可能的获取状态，尽可能的阻止进入阻塞状态,所以放在循环里面
             int s = state;
             if (s > COMPLETING) {
-                // task已经完成
+                // task已经完成,WaitNode留给其他线程处理
+                if (q != null) {
+                    q.thread = null;
+                    return state;
+                }
             } else if (s == COMPLETING) {
                 // task正在进行赋值处理
+                Thread.yield();
             } else if (q == null) {
                 q = new WaitNode();
+                /**
+                 * 将对象的创建和入栈分开，尽可能将步骤拆分，不断的更新状态
+                 * 1 降低当前线程的等待时间，尽可能减少进入等待的可能
+                 * 2 减少其他线程对公用栈的操作和迭代次数以及栈的竞争
+                 */
             } else if (!queued) {
                 // 将当前线程存放在队列的头
                 queued = UNSAFE.compareAndSwapObject(this, waitersOffset, q.next = waiters, q);
@@ -271,8 +282,17 @@ public class FutureTask<V> implements RunnableFuture<V> {
     }
 
     @Override
-    public V get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-        return null;
+    public V get(long timeout, TimeUnit unit)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        if (unit == null)
+            throw new NullPointerException();
+        int s = state;
+        if (s <= COMPLETING &&
+                (s = awaitDone(true, unit.toNanos(timeout))) <= COMPLETING) {
+            // 如果超出等待时间依然没有执行完成，则抛出超时异常
+            throw new TimeoutException();
+        }
+        return report(s);
     }
 
     //-------------------------------------------------  Static Classes
