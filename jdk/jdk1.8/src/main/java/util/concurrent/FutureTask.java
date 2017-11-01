@@ -43,7 +43,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
     private volatile WaitNode waiters;
     //-------------------------------------------------  Static Variables
     private static final int NEW = 0;
-    // 调用set方法设置完成结果，所以相当于任务已经完成
+    // 调用set方法设置完成结果(包括异常结果)，所以相当于任务已经完成
     private static final int COMPLETING = 1;
     private static final int NORMAL = 2;
     private static final int EXCEPTIONAL = 3;
@@ -100,7 +100,69 @@ public class FutureTask<V> implements RunnableFuture<V> {
 
     @Override
     public void run() {
+        /**
+         * 1. 如果state不是NEW
+         * 2. 如果runner已经不为空
+         */
+        if (state != NEW ||
+                !UNSAFE.compareAndSwapObject(this, runnerOffset, null, Thread.currentThread())) {
+            return;
+        }
+        try {
+            Callable<V> c = callable;
+            if (c != null && state == NEW) {
+                V result;
+                boolean ran = false;
+                try {
+                    result = c.call();
+                    ran = true;
+                } catch (Throwable e) {
+                    result = null;
+                    ran = false;
+                    /**
+                     * 如果 {@code cancel(true)}引发的中断异常 {@link InterruptedException}，
+                     * 最后get的结果会是 {@link CancellationException};
+                     * 因为cancel是通过 {@link Thread#interrupt()}实现的，在中断之前先将state
+                     * 设置为INTERRUPTING状态了，因此无法setException,状态转换失败;
+                     */
+                    //  设置异常
+                    setException(e);
+                }
+                if (ran) {
+                    // 设置结果
+                    set(result);
+                }
+            }
+        } finally {
+            runner = null;
+            int s = state;
+            if (s == INTERRUPTING) {
+                handlePossibleCancellationInterrupt(s);
+            }
+        }
+    }
 
+    protected void setException(Throwable t) {
+        if (UNSAFE.compareAndSwapInt(this, stateOffset, NEW, COMPLETING)) {
+            outCome = t;
+            UNSAFE.putOrderedInt(this, stateOffset, EXCEPTIONAL);
+            finishCompletion();
+        }
+    }
+
+    protected void set(V v) {
+        if (UNSAFE.compareAndSwapInt(this, stateOffset, NEW, COMPLETING)) {
+            outCome = v;
+            UNSAFE.putOrderedInt(this, stateOffset, NORMAL);
+            finishCompletion();
+        }
+    }
+
+    private void handlePossibleCancellationInterrupt(int s) {
+        if (s == INTERRUPTING) {
+            while (state == INTERRUPTING)
+                Thread.yield();
+        }
     }
 
     @Override
