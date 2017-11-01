@@ -142,6 +142,46 @@ public class FutureTask<V> implements RunnableFuture<V> {
         }
     }
 
+    /**
+     * 使任务变成周期任务；
+     * 只能是NEW且runner还未设置；
+     * 周期任务不返回结果，除了异常;
+     * 如果一个任务需要重复执行，可以通过runAndReset；但是
+     * 如果在执行过程中被cancel或者exception，则中断周期任务；
+     */
+    protected boolean runAndReset() {
+        if (state != NEW ||
+                !UNSAFE.compareAndSwapObject(this, runnerOffset, null, Thread.currentThread())) {
+            return false;
+        }
+
+        int s = state;
+        boolean ran = false;
+        try {
+            Callable<V> c = callable;
+            if (c != null && s == NEW) {
+                try {
+                    c.call();
+                    ran = true;
+                } catch (Throwable e) {
+                    setException(e);
+                }
+            }
+        } finally {
+            /**
+             * runner在任务的核心callable执行完成之后，必须设置为空；
+             * runner的CAS，用来防止并行执行；
+             */
+            runner = null;
+            // state must be re-read after nulling runner to prevent
+            // leaked interrupts
+            s = state;
+            if (s >= INTERRUPTING)
+                handlePossibleCancellationInterrupt(s);
+        }
+        return ran && s == NEW;
+    }
+
     protected void setException(Throwable t) {
         if (UNSAFE.compareAndSwapInt(this, stateOffset, NEW, COMPLETING)) {
             outCome = t;
