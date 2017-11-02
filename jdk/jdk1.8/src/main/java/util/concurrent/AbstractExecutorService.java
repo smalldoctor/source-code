@@ -78,7 +78,8 @@ public abstract class AbstractExecutorService implements ExecutorService {
      * 1. 所有task都完成（异常结束的任务，正常结束的任务，被取消的任务）时才完成；
      * 2. 在get某个任务的结果时，发生异常（除执行异常和取消异常）
      * <p>
-     * 如果存在没有完成的任务，则取消能取消的任务
+     * 取消任务：
+     * 1. 获取任务返回结果时，发生中断异常;
      *
      * @param tasks
      * @param <T>
@@ -125,7 +126,10 @@ public abstract class AbstractExecutorService implements ExecutorService {
     /**
      * 计算每个任务的执行时间，当时间到达时则退出;
      * <p>
-     * 对于没有完成的场景，取消能取消的任务；
+     * 对于没有完成的场景，取消能取消的任务:
+     * 1. 在等待结果的过程中超时异常
+     * 2. 在等待结果的过程中发生中断异常,发生中断异常
+     * 3. 在任务提交过程中超时
      *
      * @param tasks
      * @param timeout
@@ -190,14 +194,116 @@ public abstract class AbstractExecutorService implements ExecutorService {
         }
     }
 
+    /**
+     * 因为计时和非计时都是使用同一个实现，因此在非计时场景中，对超时异常进行捕获，返回null
+     *
+     * @param tasks
+     * @param <T>
+     * @return
+     * @throws InterruptedException
+     * @throws ExecutionException
+     */
     @Override
     public <T> T invokeAny(Collection<? extends Callable<T>> tasks)
             throws InterruptedException, ExecutionException {
-        return null;
+        try {
+            return doInvokeAny(tasks, false, 0);
+        } catch (TimeoutException cannotHappen) {
+            assert false;
+            return null;
+        }
     }
 
     @Override
-    public <T> T invokeAny(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-        return null;
+    public <T> T invokeAny(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        return doInvokeAny(tasks, true, unit.toNanos(timeout));
+    }
+
+    /**
+     * 通常情况下获取第一个正常完成的任务；
+     * <p>
+     * ABC三个任务，可能A任务执行完成了，但是非正常完成，则需要继续计时，获取下个任务
+     * <p>
+     * 如果所有任务都是异常完成（状态是Exceptional），则抛出最后一个任务的异常；
+     * 如果超时，则抛出超时异常；
+     * <p>
+     * 不论何种情况，都会尝试取消任务尚未完成的任务；
+     *
+     * @param tasks
+     * @param timed
+     * @param nanos 指所有任务被提交之后，开始计算时间
+     * @param <T>
+     * @return
+     * @throws InterruptedException
+     * @throws ExecutionException
+     * @throws TimeoutException
+     * @throws IllegalArgumentException 如果任务数量为0
+     */
+    private <T> T doInvokeAny(Collection<? extends Callable<T>> tasks,
+                              boolean timed, long nanos)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        if (tasks == null)
+            throw new NullPointerException();
+        int ntasks = tasks.size();
+        if (ntasks == 0) {
+            throw new IllegalArgumentException();
+        }
+        List<Future<T>> futures = new ArrayList<Future<T>>(ntasks);
+        ExecutorCompletionService<T> ecs = new ExecutorCompletionService<T>(this);
+
+        try {
+            // Record exceptions so that if we fail to obtain any
+            // result, we can throw the last exception we got.
+            ExecutionException ee = null;
+            long lastTime = timed ? System.currentTimeMillis() : 0L;
+            Iterator<? extends Callable<T>> it = tasks.iterator();
+
+            futures.add(ecs.submit(it.next()));
+            --ntasks;
+            int active = 1;
+            for (; ; ) {
+                Future<T> f = ecs.poll();
+                if (f == null) {
+                    if (ntasks > 0) {
+                        --ntasks;
+                        futures.add(ecs.submit(it.next()));
+                        ++active;
+                    } else if (active == 0) {
+                        // ABC三个任务，A任务异常完成，则会获取下个任务的；
+                        break;
+                    } else if (timed) {
+                        f = ecs.poll(nanos, TimeUnit.NANOSECONDS);
+                        if (f == null) {
+                            throw new TimeoutException();
+                        }
+                        long now = System.currentTimeMillis();
+                        nanos -= now - lastTime;
+                        lastTime = now;
+                    } else {
+                        f = ecs.take();
+                    }
+                }
+                if (f != null) {
+                    --active;
+                    try {
+                        /**
+                         * 如果task非正常完成，则会抛出异常，则继续获取下个task
+                         */
+                        return f.get();
+                    } catch (ExecutionException eex) {
+                        ee = eex;
+                    } catch (RuntimeException rex) {
+                        ee = new ExecutionException(rex);
+                    }
+                }
+            }
+            if (ee == null)
+                ee = new ExecutionException();
+            throw ee;
+        } finally {
+            for (Future<T> f : futures)
+                f.cancel(true);
+        }
     }
 }

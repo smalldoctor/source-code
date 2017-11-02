@@ -153,6 +153,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
      * 周期任务不返回结果，除了异常;
      * 如果一个任务需要重复执行，可以通过runAndReset；但是
      * 如果在执行过程中被cancel或者exception，则中断周期任务；
+     * @return 如果call执行完成并且最后状态为NEW，则返回true，代表可以重复执行；
      */
     protected boolean runAndReset() {
         if (state != NEW ||
