@@ -53,6 +53,7 @@ public class LockSupport {
 
     /**
      * Unpark指定的线程；
+     * unpark不会设置中断标志；
      *
      * @param thread 如果是null，则不做任何处理
      */
@@ -62,6 +63,12 @@ public class LockSupport {
         }
     }
 
+    /**
+     * 需要自己在第一次调用park的地方检查unpark的原因；
+     * 中断通知会使park终端，但是不会抛出中断异常，需要自己检查中断标志；
+     *
+     * @param blocker
+     */
     public static void park(Object blocker) {
         Thread t = Thread.currentThread();
         setBlocker(t, blocker);

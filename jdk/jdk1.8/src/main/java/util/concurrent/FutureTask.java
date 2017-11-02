@@ -10,6 +10,11 @@ import java.util.concurrent.locks.LockSupport;
  * ）不可以取消或者重启；但是可以通过runAndReset的方法重启；
  * <p>
  * {@code done}用来进行task {@code isDone}之后的相关工作，如回调等；
+ * <p>
+ * FutureTask是一个包装器，将Runnable（Runnable->Callable）和Callable包装成可以跟踪的异步TASK
+ * Runnable是任务，Future是跟踪器，如果想成为一个可以跟踪的任务，则是同时继承Runnable和Future；
+ * <p>
+ * 需要注意区分工作线程和调用线程；
  *
  * @param <V>
  */
@@ -311,8 +316,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
         boolean queued = false;
         for (; ; ) {
             /**
-             * {@link LockSupport#park()}在阻塞被中断时是不会抛出异常的；
-             * 因此需要自己检查异常
+             * {@link LockSupport#park()}在阻塞被中断时是不会抛出异常的,因此需要自己检查异常;
              * 因为task尚未完成，因此当前线程在阻塞等待完成
              */
             if (Thread.interrupted()) {
