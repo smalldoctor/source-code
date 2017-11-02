@@ -3,6 +3,7 @@ package com.rmxue.concurrent.base;
 import java.lang.reflect.Method;
 
 public class Test {
+    @org.junit.Test
     public void testException() {
         /*RuntimeException与Exception的区别
         * 处理策略的不一样：
@@ -10,7 +11,37 @@ public class Test {
         * 2. Exception在编译期则必须进行处理，cache或者throws；
         *
         * */
-        throw new RuntimeException();
+//        throw new RuntimeException();
+
+        /*try {
+            throw new NullPointerException();
+        } catch (Exception e) {
+            System.out.println("catch....");
+        } finally {
+            System.out.println("finally .....");
+        }
+
+        try {
+            // 没有catch，一样会被抛出，只是finally起到最后清理资源的作用
+            throw new NullPointerException();
+        } finally {
+            System.out.println("finally .....");
+        }*/
+
+       test();
+    }
+
+    public Object test(){
+        try {
+            /**
+             * return 后面的语句抛出异常，因此不会退出方法
+             */
+            return 1/0;
+        }catch (Throwable e){
+            System.out.println("exception");
+        }
+        System.out.println("sdsdf.....");
+        return 100;
     }
 
     public void methods(Class<?>[] clazz) {
@@ -51,7 +82,8 @@ public class Test {
     }
 
     @org.junit.Test
-    public void testEnum(){
+    public void testEnum() {
         System.out.println(ProcessCode.Ord_Sec_SerialNewGroup.getProcessName());
     }
+
 }
