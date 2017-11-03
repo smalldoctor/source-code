@@ -106,6 +106,8 @@ public class FutureTask<V> implements RunnableFuture<V> {
     /**
      * 任务执行过程中，task本身发生的异常，都被封装成了 {@link ExecutionException}，
      * 然后通过 {@link Future#get()}抛出异常；
+     * <p>
+     * 因为对异常进行捕获，所以可以保证不会抛出异常，则不会使工作线程因为异常被回收
      */
     @Override
     public void run() {

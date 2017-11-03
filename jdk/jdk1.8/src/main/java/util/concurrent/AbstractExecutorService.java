@@ -258,7 +258,7 @@ public abstract class AbstractExecutorService implements ExecutorService {
             // result, we can throw the last exception we got.
             ExecutionException ee = null;
             // JDK改为计算deadline
-            final long deadline = System.currentTimeMillis() + nanos;
+            final long deadline = timed ? System.nanoTime() + nanos : 0L;
             Iterator<? extends Callable<T>> it = tasks.iterator();
 
             futures.add(ecs.submit(it.next()));

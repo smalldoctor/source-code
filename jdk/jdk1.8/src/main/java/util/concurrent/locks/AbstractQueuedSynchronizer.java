@@ -42,33 +42,6 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
 
     private static final long serialVersionUID = 7373984972572414691L;
 
-    /**
-     * Unsafe是JDK提供对操作系统底层的访问,建议只在JDK的类库中使用;
-     */
-    private static final Unsafe unsafe = Unsafe.getUnsafe();
-    private static final long stateOffset;
-    private static final long headOffset;
-    private static final long tailOffset;
-    private static final long waitStatusOffset;
-    private static final long nextOffset;
-
-    static {
-        try {
-            //获取Field的偏移量
-            stateOffset = unsafe.objectFieldOffset(
-                    AbstractQueuedSynchronizer.class.getDeclaredField("state"));
-            headOffset = unsafe.objectFieldOffset(
-                    AbstractQueuedSynchronizer.class.getDeclaredField("head"));
-            tailOffset = unsafe.objectFieldOffset(
-                    AbstractQueuedSynchronizer.class.getDeclaredField("tail"));
-            waitStatusOffset = unsafe.objectFieldOffset(
-                    Node.class.getDeclaredField("waitStatus"));
-            nextOffset = unsafe.objectFieldOffset(Node.class.getDeclaredField("next"));
-        } catch (Exception ex) {
-            throw new Error(ex);
-        }
-    }
-
     private final static boolean compareAndSetWaitStatus(Node node, int expect, int update) {
         return unsafe.compareAndSwapInt(node, waitStatusOffset, expect, update);
     }
@@ -99,6 +72,8 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
     /**
      * 线程会被反复的唤醒或者阻塞，直到tryAcquire成功;
      * 独占模式，忽视中断
+     * <p>
+     * 1. 只有自己是下个获取锁的节点才去尝试获取锁，即head的下个节点
      *
      * @param node
      * @param arg
@@ -122,8 +97,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
                     failed = false;
                     return interrupted;
                 }
-                // p != head 或者 tryAcquire失败，则挂起线程；
-                // 前继节点waitStatus为SINGAL（后继节点需要唤醒）
+                // p != head 或者 tryAcquire失败，则尝试挂起线程；
                 if (shouldParkAfterFailedAcquire(p, node)
                         && parkAndCheckInterrupt()) {
                     // 如果是中断返回的
@@ -139,7 +113,8 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
     }
 
     /**
-     * 共享模式
+     * 共享模式;
+     * park时被中断，不处理中断;
      *
      * @param arg
      */
@@ -182,6 +157,10 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         }
     }
 
+    /**
+     * @param arg
+     * @return 如果为负数则获取失败，如果为0则后续获取无法成功，如果为大于0后续获取有可能成功
+     */
     protected int tryAcquireShared(int arg) {
         throw new UnsupportedOperationException();
     }
@@ -216,6 +195,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
                     ((ws = pred.waitStatus) == Node.SIGNAL
                             || (ws <= 0 && compareAndSetWaitStatus(pred, ws, Node.SIGNAL)))
                     && pred.thread != null) {
+                // 进行当前取消节点的前置节点的后置节点的指针设置
                 Node next = node.next;
                 if (next != null && next.waitStatus <= 0) {
                     compareAndSetNext(pred, predNext, next);
@@ -245,7 +225,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
     }
 
     /**
-     * 检查线程在获取锁失败之后，是否需要被block
+     * 检查线程在获取锁失败之后，是否需要被park；
      *
      * @param pred
      * @param node
@@ -254,7 +234,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
     private static final boolean shouldParkAfterFailedAcquire(Node pred, Node node) {
         int ws = pred.waitStatus;
         if (ws == Node.SIGNAL) {
-            // 因为前继节点的状态已经SIGNAL,asking a release to signal it
+            // 前一个节点状态已经设置为SIGNAL（代表需要主动的UNPARK下个节点的线程），因此可以安全的PARK
             return true;
         }
         //
@@ -266,11 +246,13 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
             } while (pred.waitStatus > 0);
             pred.next = node;
         } else {
-            // CONDITION状态用于ConditionObject,不会出现在此处;
             // waitStatus是0(初始化)或者PROPAGATE；
             compareAndSetWaitStatus(pred, ws, Node.SIGNAL);
         }
-        // 如果前继节点没有waitStatus=SIGNAL，则说明当前线程没有阻塞，则再尝试获取一次锁
+        /**
+         * 在JUC的实现中，都不是直接进行挂起，而是进行过关键操作或者有一定耗时的操作之后都会
+         * 进行一次是否满足可以不阻塞或者不挂起的条件的判断（如是否成功获取锁，是否获取到异步计算的结果）
+         */
         return false;
     }
 
@@ -282,10 +264,14 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
      * <p>
      * CAS只能对指定的内存空间(单个共享变量)保证原子操作,线程安全;
      * 但是多个共享变量是无法保证的,但是可以将多个变为一个,从而达到原子操作,线程安全;
+     * <p>
+     * 1. 入队只需加入队尾设置tail，出队则设置head
+     * 2. 需要处理后继节点的问题，因为后继节点存在被取消或者超时的情况
+     * 3. 如果一个节点被Cancel，则需要将后继节点link到一个非空的前继节点
      */
     static final class Node {
         /**
-         * 代表节点以共享模式
+         * 代表节点以共享模式；利用地址比较，提高速度
          */
         static final Node SHARED = new Node();
         /**
@@ -301,7 +287,8 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         static final int CANCELLED = 1;
 
         /**
-         * 代表继任者(接替线程,后继线程)线程需要唤醒,即结束阻塞状态
+         * 代表继任者(接替线程,后继线程)线程需要唤醒；
+         * 下个等待节点所对应的线程park，需要unpark
          */
         static final int SIGNAL = -1;
 
@@ -323,6 +310,9 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         // 拥有当前节点的线程
         volatile Thread thread;
 
+        /**
+         * waitStatus的状态只有Cancelled是1，其他状态都是小于0；
+         */
         volatile int waitStatus;
 
         /**
@@ -360,6 +350,8 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
     /**
      * 等待队列的头,懒初始化(队列新建时是null)。除了初始化,只能使用setHead方法进行修改。
      * 如果是队列的头,需要保证它的waitState不能是Cancelled。
+     * <p>
+     * head表示已经出队的线程
      * <p>
      * volatile 多线程
      */
@@ -503,7 +495,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         Node h = head;
         setHead(node);
 
-        // 此处条件无法理解。。。？
+        // 因为是共享模式，出队之后则需要判断是否可以唤醒后续等待节点，即后续等待节点是否可以获取锁
         if (propagate > 0 || h == null ||
                 h.waitStatus < 0) {
             Node s = node.next;
@@ -736,6 +728,34 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
                     break;
                 }
             }
+        }
+    }
+
+
+    /**
+     * Unsafe是JDK提供对操作系统底层的访问,建议只在JDK的类库中使用;
+     */
+    private static final Unsafe unsafe = Unsafe.getUnsafe();
+    private static final long stateOffset;
+    private static final long headOffset;
+    private static final long tailOffset;
+    private static final long waitStatusOffset;
+    private static final long nextOffset;
+
+    static {
+        try {
+            //获取Field的偏移量
+            stateOffset = unsafe.objectFieldOffset(
+                    AbstractQueuedSynchronizer.class.getDeclaredField("state"));
+            headOffset = unsafe.objectFieldOffset(
+                    AbstractQueuedSynchronizer.class.getDeclaredField("head"));
+            tailOffset = unsafe.objectFieldOffset(
+                    AbstractQueuedSynchronizer.class.getDeclaredField("tail"));
+            waitStatusOffset = unsafe.objectFieldOffset(
+                    Node.class.getDeclaredField("waitStatus"));
+            nextOffset = unsafe.objectFieldOffset(Node.class.getDeclaredField("next"));
+        } catch (Exception ex) {
+            throw new Error(ex);
         }
     }
 }
