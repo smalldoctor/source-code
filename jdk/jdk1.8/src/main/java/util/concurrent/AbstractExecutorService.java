@@ -103,7 +103,8 @@ public abstract class AbstractExecutorService implements ExecutorService {
             /**
              * 需要等待其完成
              */
-            for (Future<T> f : futures) {
+            for (int i = 0; i < futures.size(); i++) {
+                Future<T> f = futures.get(i);
                 if (!f.isDone()) {
                     try {
                         f.get();
@@ -152,22 +153,24 @@ public abstract class AbstractExecutorService implements ExecutorService {
             for (Callable<T> t : tasks)
                 futures.add(newTaskFor(t));
 
-            long lastTime = System.currentTimeMillis();
+            /**
+             * JDK1.8修改为计算deadline，使得计算时间更加准确
+             */
+            final long deadline = System.currentTimeMillis() + nanos;
+            final int size = futures.size();
             /**
              * 计算每个任务执行的时间，超出时间则退出
              */
-            Iterator<Future<T>> it = futures.iterator();
-            while (it.hasNext()) {
-                execute((Runnable) it.next());
-                long now = System.currentTimeMillis();
-                nanos -= now - lastTime;
-                lastTime = now;
+            for (int i = 0; i < size; i++) {
+                execute((Runnable) futures.get(i));
+                nanos = deadline - System.currentTimeMillis();
                 if (nanos <= 0) {
                     return futures;
                 }
             }
 
-            for (Future<T> f : futures) {
+            for (int i = 0; i < size; i++) {
+                Future<T> f = futures.get(i);
                 if (!f.isDone()) {
                     if (nanos <= 0) {
                         return futures;
@@ -180,9 +183,7 @@ public abstract class AbstractExecutorService implements ExecutorService {
                         return futures;
                     }
                 }
-                long now = System.currentTimeMillis();
-                nanos -= now - lastTime;
-                lastTime = now;
+                nanos = deadline - System.currentTimeMillis();
             }
             done = true;
             return futures;
@@ -256,7 +257,8 @@ public abstract class AbstractExecutorService implements ExecutorService {
             // Record exceptions so that if we fail to obtain any
             // result, we can throw the last exception we got.
             ExecutionException ee = null;
-            long lastTime = timed ? System.currentTimeMillis() : 0L;
+            // JDK改为计算deadline
+            final long deadline = System.currentTimeMillis() + nanos;
             Iterator<? extends Callable<T>> it = tasks.iterator();
 
             futures.add(ecs.submit(it.next()));
@@ -277,9 +279,7 @@ public abstract class AbstractExecutorService implements ExecutorService {
                         if (f == null) {
                             throw new TimeoutException();
                         }
-                        long now = System.currentTimeMillis();
-                        nanos -= now - lastTime;
-                        lastTime = now;
+                        nanos = deadline - System.currentTimeMillis();
                     } else {
                         f = ecs.take();
                     }
