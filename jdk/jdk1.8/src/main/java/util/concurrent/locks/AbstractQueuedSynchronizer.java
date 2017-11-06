@@ -124,6 +124,11 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         }
     }
 
+    /**
+     * 当是head之后的第一个节点则尝试获取锁
+     *
+     * @param arg
+     */
     private void doAcquireShared(int arg) {
         final Node node = addWaiter(Node.SHARED);
         boolean failed = true;
@@ -139,7 +144,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
                         pred.next = null;
                         failed = false;
                         if (interrupted) {
-                            // 因为park是支持中断，但是不会抛出异常，所以检查是否中断，如果是则重置中断状态
+                            // 因为 park是支持中断，但是不会抛出异常，所以检查是否中断，如果是则重置中断状态
                             selfInterrupt();
                         }
                         return;
@@ -226,6 +231,8 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
 
     /**
      * 检查线程在获取锁失败之后，是否需要被park；
+     * <p>
+     * 1. 在挂起等待的时候，会将前一个节点的状态设置为SIGNAL，但是存在设置失败的可能
      *
      * @param pred
      * @param node
@@ -496,13 +503,15 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         setHead(node);
 
         // 因为是共享模式，出队之后则需要判断是否可以唤醒后续等待节点，即后续等待节点是否可以获取锁
-        if (propagate > 0 || h == null ||
-                h.waitStatus < 0) {
+        if (propagate > 0 || h == null || h.waitStatus < 0
+                // 因为head方法的开头是赋值给了局部变量，可能在执行到此处发生变化了，所以重新读取并赋值
+                || (h = head) == null || h.waitStatus < 0) {
             Node s = node.next;
-            // 因为next是null，因此不支持next的情况，因此尝试释放
+            // 因为next是null，因此尝试释放，可能存在执行过程，其他线程加入队列进行等待
             // 如果s不是null，则需要判断下个节点是否是共享节点
             if (s == null || s.isShared()) {
                 // 尝试释放下个共享节点
+                doReleaseShared();
             }
         }
     }
@@ -699,14 +708,20 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * 释放：只是唤醒下个节点，然后节点自己尝试获取锁；
+     * <p>
+     * 需要注意区分 调用（唤醒）线程和工作线程
+     */
     protected void doReleaseShared() {
         for (; ; ) {
             Node h = head;
             // 因为release方法会在每次释放锁的时候调用，而调用的时候可能队列没有等候的线程
             if (h != null && h != tail) {
                 int ws = head.waitStatus;
-                // 因为存在挂起的线程，那么挂起线程的前置节点的waitStatus是Node.SIGNAL，
-                // 只有SIGNAL时，才会挂起线程。
+                /**
+                 * 下个节点如果是挂起状态
+                 */
                 if (ws == Node.SIGNAL) {
                     if (!compareAndSetWaitStatus(h, Node.SIGNAL, 0)) {
                         // 如果cas失败则需要再次loop
