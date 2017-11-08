@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit;
  * <p>
  * 如生产者和消费者的中间缓存，当缓存有数据时消费数据，当缓存无数据时停止消费，等待数据生产；
  * 当缓存无数据时生产数据，当缓存数据满时停止生产等待数据消费；
+ * Condition就是一个条件对象，作用类似于锁对象；在某种条件下，线程挂起在条件对象的队列中排队；
  * <pre>
  * class BoundedBuffer {
  *   <b>final Lock lock = new ReentrantLock();</b>
@@ -121,6 +122,9 @@ public interface Condition {
 
     boolean awaitUntil(Date deadline) throws InterruptedException;
 
+    /**
+     * 线程在从await返回之前，必须先获取锁；类似于{@link Object#wait()}；
+     */
     void signal();
 
     void signalAll();

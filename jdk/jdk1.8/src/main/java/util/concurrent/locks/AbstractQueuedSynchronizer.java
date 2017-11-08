@@ -11,6 +11,10 @@ package java.util.concurrent.locks;
 
 import sun.misc.Unsafe;
 
+import java.io.Serializable;
+import java.util.Date;
+import java.util.concurrent.TimeUnit;
+
 /**
  * 各种同步机制的抽象,如信号量,闭锁,周期障碍,锁,在多线程场景下,以共享状态实现同步,
  * 在符合某个条件时做什么事情
@@ -303,97 +307,6 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
          * 进行一次是否满足可以不阻塞或者不挂起的条件的判断（如是否成功获取锁，是否获取到异步计算的结果）
          */
         return false;
-    }
-
-    /**
-     * AQS的实现基于一个FIFO的lock queue，Queue的每个元素一个Node或者
-     * 可以称为Queue的每个节点Node，都对应一个线程。
-     * <p>
-     * 等待队列的Node类,阻塞线程队列的节点;等待队列是CHL所队列的变体;
-     * <p>
-     * CAS只能对指定的内存空间(单个共享变量)保证原子操作,线程安全;
-     * 但是多个共享变量是无法保证的,但是可以将多个变为一个,从而达到原子操作,线程安全;
-     * <p>
-     * 1. 入队只需加入队尾设置tail，出队则设置head
-     * 2. 需要处理后继节点的问题，因为后继节点存在被取消或者超时的情况
-     * 3. 如果一个节点被Cancel，则需要将后继节点link到一个非空的前继节点
-     */
-    static final class Node {
-        /**
-         * 代表节点以共享模式；利用地址比较，提高速度
-         */
-        static final Node SHARED = new Node();
-        /**
-         * 代表节点以排他模式,独占模式
-         */
-        static final Node EXCLUSIVE = null;
-
-        //waitStatus
-
-        /**
-         * 代表线程被Canceled。node因为超时或者中断被cancelled。
-         */
-        static final int CANCELLED = 1;
-
-        /**
-         * 代表继任者(接替线程,后继线程)线程需要唤醒；
-         * 下个等待节点所对应的线程park，需要unpark
-         */
-        static final int SIGNAL = -1;
-
-        /**
-         * 线程正在CONDITION上等待
-         */
-        static final int CONDITION = -2;
-
-        /**
-         * 代表后续节点会传播唤醒动作，共享模式起作用
-         */
-        static final int PROPAGATE = -3;
-
-        //前置节点
-        volatile Node prev;
-        //后置节点
-        volatile Node next;
-
-        // 拥有当前节点的线程
-        volatile Thread thread;
-
-        /**
-         * waitStatus的状态只有Cancelled是1，其他状态都是小于0；
-         */
-        volatile int waitStatus;
-
-        /**
-         *
-         */
-        Node nextWaiter;
-
-        Node() { //用于新建head和shared
-        }
-
-        Node(Thread thread, Node mode) { // used by addWaiter
-            this.thread = thread;
-            this.nextWaiter = mode;
-        }
-
-        Node(Thread thread, int waitStatus) { // used by Condition
-            this.thread = thread;
-            this.waitStatus = waitStatus;
-        }
-
-        final Node predecessor() throws NullPointerException {
-            Node p = prev;
-            if (p == null) {
-                throw new NullPointerException();
-            } else {
-                return p;
-            }
-        }
-
-        final boolean isShared() {
-            return nextWaiter == SHARED;
-        }
     }
 
     /**
@@ -725,7 +638,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
      * if tryRelease return true.
      *
      * @param arg
-     * @return
+     * @return {@link #tryRelease}的结果
      */
     public final boolean release(int arg) {
         if (tryRelease(arg)) {
@@ -787,7 +700,281 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         }
     }
 
+    /**
+     * 释放锁，同时返回释放前的状态；
+     * 如果释放失败抛出监视器错误异常，同时当前节点CANCELLED;
+     *
+     * @param node
+     * @return
+     * @throws IllegalMonitorStateException 是一个 {@link RuntimeException}
+     */
+    final int fullyRelease(Node node) {
+        boolean failed = true;
+        try {
+            int savedState = getState();
+            if (release(savedState)) {
+                failed = false;
+                return savedState;
+            } else {
+                throw new IllegalMonitorStateException();
+            }
+        } finally {
+            if (failed)
+                node.waitStatus = Node.CANCELLED;
+        }
+    }
 
+    /**
+     * 判断Node是否是在Sync Queue；
+     *
+     * @return
+     */
+    final boolean isOnSyncQueue(Node node) {
+        // 如果状态是Condition或者prev为null，则肯定不在Sync Queue中
+        if (node.waitStatus == Node.CONDITION || node.prev == null)
+            return false;
+        // 因为SyncQueue通过是反向遍历的方式，优先设置prev节点，所以next不为空，一定是已经成功入队
+        if (node.next != null)
+            return true;
+        // 从Sync Queue的tail开始反向查找指定的节点
+        return findNodeFromTail(node);
+    }
+
+    private boolean findNodeFromTail(Node node) {
+        Node t = tail;
+        for (; ; ) {
+            if (t == node)
+                return true;
+            if (t == null)
+                return false;
+            t = t.prev;
+        }
+    }
+
+    //-------------------------------------------------  Inner Class
+
+    /**
+     * ConditionObject可以序列化，但是其属性是不可以序列化;
+     * <p>
+     * Condition实现：
+     * 1. 线程在await在挂起之后，通过SIGNAL/中断等先唤醒线程，然后获取锁，再返回;
+     * 因此在使用Condition一定要捕获异常，最后确保锁的释放;
+     * <p>
+     * 个人理解：
+     * 1. 因为Condition的使用是先获取当前Condition关联的Lock，所以不存在并发修改的问题，所以
+     * 无须考虑复杂的并发情景，所以可以简化实现；
+     * 2. 等待锁的Sync队列和Condition的队列是不同的队列;
+     */
+    public class ConditionObject implements Condition, Serializable {
+        private static final long serialVersionUID = 1173984872572414699L;
+
+        //-------------------------------------------------  Instance Variables
+        /**
+         * Condition用来表示条件调对象，维护当前条件下的等待队列；
+         * 队列的实现通过维护一个Node的链表实现
+         */
+        private transient Node firstWaiter;
+        private transient Node lastWaiter;
+
+        //-------------------------------------------------  Constructor
+        public ConditionObject() {
+        }
+
+        //-------------------------------------------------  Internal methods
+        private Node addConditionWaiter() {
+            Node t = lastWaiter;
+            if (t != null && t.waitStatus != Node.CONDITION) {
+                unlinkCancelledWaiter();
+                t = lastWaiter;
+            }
+            Node node = new Node(Thread.currentThread(), Node.CONDITION);
+            // 默认如果tail节点为空，则没有初始化（通chl队列实现）
+            if (t == null)
+                firstWaiter = node;
+            else
+                t.nextWaiter = node;
+            lastWaiter = node;
+            return node;
+        }
+
+        /**
+         * 在添加新的等待线程时，判断最后一个节点是否被Cancelled，如果Cancelled则直接释放；
+         * 因为在添加waiter时进行此动作，因此是在持有锁的情况下进行的操作；
+         * <p>
+         * 从头开始逐个遍历Node，删除被Cancelled Node;
+         * <p>
+         */
+        private void unlinkCancelledWaiter() {
+            // 指向当前遍历的节点
+            Node t = this.firstWaiter;
+            // 用于指向最后一个node
+            Node trail = null;
+            // 从头开始遍历
+            while (t != null) {
+                Node next = t.nextWaiter;
+                if (t.waitStatus != Node.CONDITION) {
+                    t.nextWaiter = null;
+                    if (trail == null) {
+                        // 没有成功找到第一个CONDITION的NODE
+                        this.firstWaiter = next;
+                    } else {
+                        trail.nextWaiter = next;
+                    }
+                    // 设置最后一个节点;只有当前节点状态非CONDITION且next为空时，才需要改变last节点，否则不需要
+                    if (next == null) {
+                        lastWaiter = tail;
+                    }
+                } else {
+                    trail = t;
+                }
+                t = next;
+            }
+        }
+
+
+        /**
+         * 这之间涉及转换的过程;
+         *
+         * @throws InterruptedException
+         * @throws IllegalMonitorStateException 错误监视器状态异常,释放锁失败
+         */
+        @Override
+        public void await() throws InterruptedException {
+            // 检查中断状态
+            if (Thread.interrupted())
+                throw new InterruptedException();
+            Node node = addConditionWaiter();
+            // 如果释放锁失败，则当前线程对应的Node会被设置为Cancelled;
+            int savedState = fullyRelease(node);
+        }
+
+        @Override
+        public void awaitUninterruptibly() {
+
+        }
+
+        @Override
+        public long awaitNanos(long nanosTimeout) throws InterruptedException {
+            return 0;
+        }
+
+        @Override
+        public boolean await(long time, TimeUnit unit) throws InterruptedException {
+            return false;
+        }
+
+        @Override
+        public boolean awaitUntil(Date deadline) throws InterruptedException {
+            return false;
+        }
+
+        @Override
+        public void signal() {
+
+        }
+
+        @Override
+        public void signalAll() {
+
+        }
+    }
+    //-------------------------------------------------  Static Class
+
+    /**
+     * AQS的实现基于一个FIFO的lock queue，Queue的每个元素一个Node或者
+     * 可以称为Queue的每个节点Node，都对应一个线程。
+     * <p>
+     * 等待队列的Node类,阻塞线程队列的节点;等待队列是CHL所队列的变体;
+     * <p>
+     * CAS只能对指定的内存空间(单个共享变量)保证原子操作,线程安全;
+     * 但是多个共享变量是无法保证的,但是可以将多个变为一个,从而达到原子操作,线程安全;
+     * <p>
+     * 1. 入队只需加入队尾设置tail，出队则设置head
+     * 2. 需要处理后继节点的问题，因为后继节点存在被取消或者超时的情况
+     * 3. 如果一个节点被Cancel，则需要将后继节点link到一个非空的前继节点
+     */
+    static final class Node {
+        /**
+         * 代表节点以共享模式；利用地址比较，提高速度
+         */
+        static final Node SHARED = new Node();
+        /**
+         * 代表节点以排他模式,独占模式
+         */
+        static final Node EXCLUSIVE = null;
+
+        //waitStatus
+
+        /**
+         * 代表线程被Canceled。node因为超时或者中断被cancelled。
+         */
+        static final int CANCELLED = 1;
+
+        /**
+         * 代表继任者(接替线程,后继线程)线程需要唤醒；
+         * 下个等待节点所对应的线程park，需要unpark
+         */
+        static final int SIGNAL = -1;
+
+        /**
+         * 线程正在CONDITION上等待
+         */
+        static final int CONDITION = -2;
+
+        /**
+         * 代表后续节点会传播唤醒动作，共享模式起作用
+         */
+        static final int PROPAGATE = -3;
+
+        //前置节点
+        volatile Node prev;
+        //后置节点
+        volatile Node next;
+
+        // 拥有当前节点的线程
+        volatile Thread thread;
+
+        /**
+         * waitStatus的状态只有Cancelled是1，其他状态都是小于0；
+         */
+        volatile int waitStatus;
+
+        /**
+         * 在CHL队列实现中：
+         * 1. nextWaiter用来判断是否共享模式；通过值比较即地址比较的方式快速判断；
+         * 在Condition的队列中：
+         * 1. 用来指向下个节点,实现链表，从而实现队列
+         */
+        Node nextWaiter;
+
+        Node() { //用于新建head和shared
+        }
+
+        Node(Thread thread, Node mode) { // used by addWaiter
+            this.thread = thread;
+            this.nextWaiter = mode;
+        }
+
+        Node(Thread thread, int waitStatus) { // used by Condition
+            this.thread = thread;
+            this.waitStatus = waitStatus;
+        }
+
+        final Node predecessor() throws NullPointerException {
+            Node p = prev;
+            if (p == null) {
+                throw new NullPointerException();
+            } else {
+                return p;
+            }
+        }
+
+        final boolean isShared() {
+            return nextWaiter == SHARED;
+        }
+    }
+
+    //-------------------------------------------------  Static Code
     /**
      * Unsafe是JDK提供对操作系统底层的访问,建议只在JDK的类库中使用;
      */
