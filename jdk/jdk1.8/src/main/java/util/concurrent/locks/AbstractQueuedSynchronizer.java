@@ -55,7 +55,9 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
 
     /**
      * 实现Lock的lock方法。独占模式。
-     * 至少调用tryAcquire一次，如果tryAcquire返回失败，则线程将被放入队列
+     * 至少调用tryAcquire一次，如果tryAcquire返回失败，则线程将被放入队列；
+     * <p>
+     * 互斥获取是不响应中断，即不会抛出中断异常；但是会设置线程的中断状态；
      */
     public final void acquire(int arg) {
         // 调用一次tryAcquire，如果失败则放入queue
@@ -66,6 +68,46 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
             // 是被中断唤醒之后成功获取锁,重置线程的中断状态;如果从碰巧入队之后，立刻成功获取到锁，则返回false，则
             // 是非中断唤醒；
             selfInterrupt();
+        }
+    }
+
+    /**
+     * 互斥获取锁，支持中断异常；
+     *
+     * @param arg
+     */
+    public final void acquireInterruptibly(int arg)
+            throws InterruptedException {
+        // 首先检查线程的中断状态
+        if (Thread.interrupted()) {
+            throw new InterruptedException();
+        }
+        if (!tryAcquire(arg)) {
+            doAcquireInterruptibly(arg);
+        }
+    }
+
+    private void doAcquireInterruptibly(int arg)
+            throws InterruptedException {
+        Node node = addWaiter(Node.EXCLUSIVE);
+        boolean failed = true;
+        try {
+            for (; ; ) {
+                Node pred = node.predecessor();
+                if (pred == head && tryAcquire(arg)) {
+                    setHead(node);
+                    pred.next = null;
+                    failed = false;
+                    return;
+                }
+                if (shouldParkAfterFailedAcquire(pred, node)
+                        && parkAndCheckInterrupt()) {
+                    throw new InterruptedException();
+                }
+            }
+        } finally {
+            if (failed)
+                cancelAcquire(node);
         }
     }
 
@@ -738,8 +780,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
                     continue;
                 }
                 if (h == head) {
-                    // 因为获取同步器的线程会出列，而出列则是将head置为获取到的同步器的线程归属节点
-                    // 如果h==head说明没有变化，则推出循环
+                    // 在进行这些操作时，可能其他线程并发发起对队列的操作，所以需要进行判断是否发生改变；
                     break;
                 }
             }
