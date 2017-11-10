@@ -302,6 +302,20 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
     }
 
     /**
+     * @param arg
+     * @param nanosTimeout
+     * @return true 成功获取； false 超时
+     * @throws InterruptedException 支持中断异常
+     */
+    public final boolean tryAcquireSharedNanos(int arg, long nanosTimeout)
+            throws InterruptedException {
+        if (Thread.interrupted())
+            throw new InterruptedException();
+        return tryAcquireShared(arg) >= 0 ||
+                doAcquireSharedNanos(arg, nanosTimeout);
+    }
+
+    /**
      * 取消 ongoing attempt to acquire
      */
     private void cancelAcquire(Node node) {
@@ -358,6 +372,22 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
     private final boolean parkAndCheckInterrupt() {
         LockSupport.park(this);
         return Thread.interrupted();
+    }
+
+    /**
+     * Returns a string identifying this synchronizer, as well as its state.
+     * The state, in brackets, includes the String {@code "State ="}
+     * followed by the current value of {@link #getState}, and either
+     * {@code "nonempty"} or {@code "empty"} depending on whether the
+     * queue is empty.
+     *
+     * @return a string identifying this synchronizer, as well as its state
+     */
+    public String toString() {
+        int s = getState();
+        String q = hasQueuedThreads() ? "non" : "";
+        return super.toString() +
+                "[State = " + s + ", " + q + "empty queue]";
     }
 
     /**
@@ -691,6 +721,32 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
     }
 
     /**
+     * 是否有Sync的线程;
+     * 因为并发并行的原因，结果不确定
+     *
+     * @return
+     */
+    public final boolean hasQueuedThreads() {
+        return head != tail;
+    }
+
+    /**
+     * 因为并发并行的原因，结果不确定;
+     *
+     * @param condition the condition
+     * @return {@code true} if there are any waiting threads
+     * @throws IllegalMonitorStateException if exclusive synchronization
+     *                                      is not held
+     * @throws IllegalArgumentException     不是当前Sync的Condition
+     * @throws NullPointerException         if the condition is null
+     */
+    public final boolean hasWaiters(ConditionObject condition) {
+        if (!owns(condition))
+            throw new IllegalArgumentException("Not owner");
+        return condition.hasWaiters();
+    }
+
+    /**
      * 这个方法用在读写锁中，判断head节点的下个节点是否正在申请独占锁;
      *
      * @return
@@ -788,6 +844,46 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
     }
 
     /**
+     * 共享锁释放
+     *
+     * @param arg
+     * @return
+     */
+    public final boolean releaseShared(int arg) {
+        if (tryReleaseShared(arg)) {
+            doReleaseShared();
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 因为AQS通过维护整型的state来实现锁的获取释放；
+     * 因此释放锁本质是改变state；
+     * <p>
+     * <p>This method is always invoked by the thread performing release.
+     * <p>
+     * <p>The default implementation throws
+     * {@link UnsupportedOperationException}.
+     *
+     * @param arg the release argument. This value is always the one
+     *            passed to a release method, or the current state value upon
+     *            entry to a condition wait.  The value is otherwise
+     *            uninterpreted and can represent anything you like.
+     * @return {@code true} if this release of shared mode may permit a
+     * waiting acquire (shared or exclusive) to succeed; and
+     * {@code false} otherwise
+     * @throws IllegalMonitorStateException  if releasing would place this
+     *                                       synchronizer in an illegal state. This exception must be
+     *                                       thrown in a consistent fashion for synchronization to work
+     *                                       correctly.
+     * @throws UnsupportedOperationException if shared mode is not supported
+     */
+    protected boolean tryReleaseShared(int arg) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
      * Attempts to set a state to reflect a release in exclusive mode.
      * The default implementation throws UnsupportedOperationException.
      *
@@ -879,6 +975,94 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
     }
 
     /**
+     * 获取第一个节点的（等待时间最长的）线程；
+     * 如果队列为空返回null；
+     *
+     * @return null 如果队列是空
+     */
+    public final Thread getFirstQueuedThread() {
+        return head == tail ? null : fullGetFirstQueuedThread();
+    }
+
+    /**
+     * 获取Sync队列上的线程；
+     * 因为并发/并行的原因，结果存在不确定性
+     * <p>
+     * 个人理解：
+     * 问题： 为什么不直接使用list.add(p.thread)的方式？
+     * 答：因为即使先做判断p.thread != null，但是在执行list.add(p.thread)是存在执行过程，是花费执行时间的，
+     * 存在并发和并行的可能，所以无法保证list中的元素不存在null的可能；
+     *
+     * @return
+     */
+    public final Collection<Thread> getQueuedThreads() {
+        ArrayList<Thread> list = new ArrayList<>();
+        for (Node p = tail; p != null; p = p.prev) {
+            Thread t = p.thread;
+            // 因为获取线程，所以线程为判断焦点；获取什么，就以什么为判断焦点
+            if (t != null) {
+                list.add(t);
+            }
+        }
+        return list;
+    }
+
+    /**
+     * 因为并发或者并行的原因，结果是不确定的
+     *
+     * @return
+     */
+    public final int getQueueLength() {
+        int n = 0;
+        for (Node p = tail; p != null; p = p.prev) {
+            if (p.thread != null)
+                ++n;
+        }
+        return n;
+    }
+
+    public final Collection<Thread> getSharedQueuedThreads() {
+        ArrayList<Thread> list = new ArrayList<Thread>();
+        for (Node p = tail; p != null; p = p.prev) {
+            if (p.isShared()) {
+                Thread t = p.thread;
+                if (t != null)
+                    list.add(t);
+            }
+        }
+        return list;
+    }
+
+    /**
+     * 获取Condition队列的等待线程;
+     * 因为并发并行的原因，结果是不确定的
+     *
+     * @param condition
+     * @return
+     * @throws IllegalArgumentException 非当前同步器的Condition
+     */
+    public final Collection<Thread> getWaitingThread(ConditionObject condition) {
+        if (!owns(condition))
+            throw new IllegalArgumentException("Not owner");
+        return condition.getWaitingThreads();
+    }
+
+    public final int getWaitQueueLength(ConditionObject condition) {
+        if (!owns(condition))
+            throw new IllegalArgumentException("Not owner");
+        return condition.getWaitQueueLength();
+    }
+
+    /**
+     * 是否存在竞争获取锁；是否有线程加入过队列,包括曾经的加入;
+     *
+     * @return
+     */
+    public final boolean hasContended() {
+        return head != null;
+    }
+
+    /**
      * 判断Node是否是在Sync Queue；
      *
      * @return
@@ -892,6 +1076,23 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
             return true;
         // 从Sync Queue的tail开始反向查找指定的节点
         return findNodeFromTail(node);
+    }
+
+    /**
+     * Returns true if the given thread is currently queued.
+     * <p>
+     *
+     * @param thread the thread
+     * @return {@code true} if the given thread is on the queue
+     * @throws NullPointerException if the thread is null
+     */
+    public final boolean isQueued(Thread thread) {
+        if (thread == null)
+            throw new NullPointerException();
+        for (Node p = tail; p != null; p = p.prev)
+            if (p.thread == thread)
+                return true;
+        return false;
     }
 
     private boolean findNodeFromTail(Node node) {
