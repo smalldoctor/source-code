@@ -123,7 +123,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
      *
      * @param node
      * @param arg
-     * @return
+     * @return true 如果排队获取锁的过程中，被中断唤醒
      */
     final boolean acquireQueued(final Node node, int arg) {
         // 是否获取成功
@@ -751,14 +751,72 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         }
     }
 
+    /**
+     * 是否被当前线程排他持有；由子类实现；
+     * 只会被 {@link ConditionObject}调用；因此支持 {@link ConditionObject}才需要实现，否则无须实现
+     *
+     * @return
+     */
+    protected boolean isHeldExclusively() {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Node从Condition队列转移至Sync队列
+     *
+     * @param node
+     * @return
+     */
+    final boolean transferForSignal(Node node) {
+        // 改变waitStatus
+        if (!compareAndSetWaitStatus(node, Node.CONDITION, 0)) {
+            return false;
+        }
+
+        Node p = enq(node);
+        int ws = p.waitStatus;
+        /**
+         * 因为新增Node，所以前个节点需要唤醒后续节点；
+         * 为什么需要先判断ws>0？
+         * 因为ws>0说明此节点已经被CANCELLED，则不应该将其waitStatus状态设置为SIGNAL；
+         */
+        if (ws > 0 || !compareAndSetWaitStatus(p, ws, Node.SIGNAL)) {
+            LockSupport.unpark(node.thread);
+        }
+        return true;
+    }
+
+    /**
+     * 线程await过程中，被中断唤醒等（非SIGNAL场景），则将其Node节点从Condition队列转移至Sync队列；
+     * 但是需要注意如下场景：
+     * 1. 在被中断或者超时等场景下，可能其他线程也发起了SIGNAL
+     * 2. 中断和超时都被认为是CANCEL
+     *
+     * @param node
+     * @return true 如果在从Condition队列上Cancel排队成功（非SIGNAL场景），则返回true；
+     */
+    final boolean transferAfterCancelledWait(Node node) {
+        // 当前线程暂时失去CPU，或者其他线程发生并发SIGNAL, 则CAS失败
+        if (compareAndSetWaitStatus(node, Node.CONDITION, 0)) {
+            enq(node);
+            return true;
+        }
+        // 在被中断或者超时等场景下，可能其他线程也发起了SIGNAL
+        while (!isOnSyncQueue(node))
+            Thread.yield();
+        return false;
+    }
+
     //-------------------------------------------------  Inner Class
 
     /**
      * ConditionObject可以序列化，但是其属性是不可以序列化;
      * <p>
      * Condition实现：
-     * 1. 线程在await在挂起之后，通过SIGNAL/中断等先唤醒线程，然后获取锁，再返回;
-     * 因此在使用Condition一定要捕获异常，最后确保锁的释放;
+     * 1. 线程在await在挂起之后
+     * 1.1 通过SIGNAL将Node从Condition队列转移至Sync队列，排队获取锁，再返回;
+     * 1.2 通过中断唤醒线程，将Node从Condition队列转移至Sync队列，排队获取锁，再返回；
+     * 在使用Condition一定要捕获异常，最后确保锁的释放;
      * <p>
      * 个人理解：
      * 1. 因为Condition的使用是先获取当前Condition关联的Lock，所以不存在并发修改的问题，所以
@@ -775,6 +833,12 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
          */
         private transient Node firstWaiter;
         private transient Node lastWaiter;
+
+        //-------------------------------------------------  Static Variables
+        // 当从await出来时，需要再次interrupt
+        private static final int REINTERRUPT = 1;
+        // 当从await出来时，抛出异常
+        private static final int THROW_IE = -1;
 
         //-------------------------------------------------  Constructor
         public ConditionObject() {
@@ -813,6 +877,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
             while (t != null) {
                 Node next = t.nextWaiter;
                 if (t.waitStatus != Node.CONDITION) {
+                    // 断开对下个节点的链接
                     t.nextWaiter = null;
                     if (trail == null) {
                         // 没有成功找到第一个CONDITION的NODE
@@ -843,9 +908,57 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
             // 检查中断状态
             if (Thread.interrupted())
                 throw new InterruptedException();
+
+            /*加入Condition队列进行等待*/
             Node node = addConditionWaiter();
+
             // 如果释放锁失败，则当前线程对应的Node会被设置为Cancelled;
             int savedState = fullyRelease(node);
+
+            /**
+             * 线程挂起等待
+             */
+            int interruptMode = 0;
+            /**
+             * 为什么需要先判断isOnSyncQueue?
+             * 1. 在程序执行过程中，各个线程是通过调度，不断获取CPU时间片切换执行（现在多数是多核CPU）；因此在执行到此处时
+             * 可能发生其他线程发起SIGNAL；也可能当前线程失去CPU，由其他线程执行；
+             */
+            while (!isOnSyncQueue(node)) {
+                LockSupport.park(this);
+                if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
+                    break;
+            }
+
+            if (acquireQueued(node, savedState) && interruptMode != THROW_IE)
+                interruptMode = REINTERRUPT;
+            // 退出时当前节点需要从Condition的队列移除
+            if (node.nextWaiter != null)
+                unlinkCancelledWaiter();
+            if (interruptMode != 0)
+                reportInterruptAfterWait(interruptMode);
+        }
+
+        private void reportInterruptAfterWait(int interruptMode)
+                throws InterruptedException {
+            if (interruptMode == THROW_IE)
+                throw new InterruptedException();
+            else if (interruptMode == REINTERRUPT)
+                selfInterrupt();
+        }
+
+        /**
+         * 如果中断且Cancel成功，则为 THROW_IE;
+         * 如果中断但是Cancel失败，则为 REINTERRUPT；
+         * 否则为0；
+         *
+         * @param node
+         * @return
+         */
+        private int checkInterruptWhileWaiting(Node node) {
+            return Thread.interrupted() ?
+                    (transferAfterCancelledWait(node) ? THROW_IE : REINTERRUPT) :
+                    0;
         }
 
         @Override
@@ -854,13 +967,83 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         }
 
         @Override
-        public long awaitNanos(long nanosTimeout) throws InterruptedException {
-            return 0;
+        public long awaitNanos(long nanosTimeout)
+                throws InterruptedException {
+            if (Thread.interrupted())
+                throw new InterruptedException();
+            Node node = addConditionWaiter();
+            int savedState = fullyRelease(node);
+            long deadline = System.currentTimeMillis() + nanosTimeout;
+
+            int interruptMode = 0;
+            while (!isOnSyncQueue(node)) {
+                if (nanosTimeout <= 0) {
+                    transferAfterCancelledWait(node);
+                    break;
+                }
+
+                if (nanosTimeout >= spinForTimeoutThreshold)
+                    LockSupport.parkNanos(this, nanosTimeout);
+
+                if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
+                    break;
+
+                nanosTimeout = deadline - System.nanoTime();
+            }
+            if (acquireQueued(node, savedState) && interruptMode != THROW_IE)
+                interruptMode = REINTERRUPT;
+            if (node.nextWaiter != null)
+                unlinkCancelledWaiter();
+            if (interruptMode != 0)
+                reportInterruptAfterWait(interruptMode);
+            return deadline - System.nanoTime();
         }
 
+        /**
+         * 超时时间是等待的超时时间，并包括获取锁的时间
+         *
+         * @param time
+         * @param unit
+         * @return false 如果超时之前没有等待SIGNAL，则返回false
+         * @throws InterruptedException
+         */
         @Override
-        public boolean await(long time, TimeUnit unit) throws InterruptedException {
-            return false;
+        public boolean await(long time, TimeUnit unit)
+                throws InterruptedException {
+            long nanoTimeout = unit.toNanos(time);
+            if (Thread.interrupted())
+                throw new InterruptedException();
+
+            Node node = addConditionWaiter();
+            int savedState = fullyRelease(node);
+
+            final long deadline = System.nanoTime() + nanoTimeout;
+            boolean timeout = false;
+            int interruptMode = 0;
+            while (!isOnSyncQueue(node)) {
+                if (nanoTimeout <= 0) {
+                    timeout = transferAfterCancelledWait(node);
+                    break;
+                }
+
+                // 自旋时间，小于阀值则不断的自旋，降低线程切换带来的时间消耗
+                if (nanoTimeout >= spinForTimeoutThreshold)
+                    LockSupport.parkNanos(this, nanoTimeout);
+
+                // 发生中断场景
+                if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
+                    break;
+
+                nanoTimeout = deadline - System.nanoTime();
+            }
+
+            if (acquireQueued(node, savedState) && interruptMode != THROW_IE)
+                interruptMode = REINTERRUPT;
+            if (node.nextWaiter != null)
+                unlinkCancelledWaiter();
+            if (interruptMode != 0)
+                reportInterruptAfterWait(interruptMode);
+            return !timeout;
         }
 
         @Override
@@ -868,9 +1051,29 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
             return false;
         }
 
+        /**
+         * 将线程从Condition的队列移动到Lock的队列
+         */
         @Override
         public void signal() {
+            if (isHeldExclusively())
+                throw new IllegalMonitorStateException();
+            // 先入先出队列
+            Node first = this.firstWaiter;
+            if (first != null)
+                doSignal(first);
+        }
 
+        private void doSignal(Node first) {
+            do {
+                // 唤醒第一个则后续重置第一个
+                if ((firstWaiter = firstWaiter.nextWaiter) == null)
+                    lastWaiter = null;
+                // 出队的Node next重置为null；
+                // 如果原来的fisrtWaiter的next不为空，则重置为空；如果就是null，重置一次null，也没关系
+                first.nextWaiter = null;
+            } while (!(transferForSignal(first))
+                    && (first = firstWaiter) != null);
         }
 
         @Override
@@ -956,6 +1159,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         }
 
         Node(Thread thread, int waitStatus) { // used by Condition
+            // 其实默认当前节点的mode是互斥的，因为nextWaiter不等于SHARED
             this.thread = thread;
             this.waitStatus = waitStatus;
         }
