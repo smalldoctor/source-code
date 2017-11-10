@@ -1062,7 +1062,34 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
 
         @Override
         public boolean awaitUntil(Date deadline) throws InterruptedException {
-            return false;
+            long absTime = deadline.getTime();
+            if (Thread.interrupted())
+                throw new InterruptedException();
+
+            Node node = addConditionWaiter();
+            int savedState = fullyRelease(node);
+
+            boolean timedout = false;
+            int interruptMode = 0;
+            while (!isOnSyncQueue(node)) {
+                if (System.currentTimeMillis() > absTime) {
+                    timedout = transferAfterCancelledWait(node);
+                    break;
+                }
+                LockSupport.parkUntil(absTime);
+                if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
+                    break;
+            }
+
+            // 获取锁
+            if (acquireQueued(node, savedState) && interruptMode != THROW_IE)
+                interruptMode = REINTERRUPT;
+            // remove node from condition
+            if (node.nextWaiter != null)
+                unlinkCancelledWaiter();
+            if (interruptMode != 0)
+                reportInterruptAfterWait(interruptMode);
+            return !timedout;
         }
 
         /**
@@ -1090,9 +1117,24 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
                     && (first = firstWaiter) != null);
         }
 
+        private void doSignalAll(Node first) {
+            // 因为唤醒所有的等待线程，清空队列
+            lastWaiter = firstWaiter = null;
+            do {
+                Node next = first.nextWaiter;
+                first.nextWaiter = null;
+                transferForSignal(first);
+                first = next;
+            } while (first != null);
+        }
+
         @Override
         public void signalAll() {
-
+            if (!isHeldExclusively())
+                throw new IllegalMonitorStateException();
+            Node first = firstWaiter;
+            if (first != null)
+                doSignalAll(first);
         }
     }
     //-------------------------------------------------  Static Class
