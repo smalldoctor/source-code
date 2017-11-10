@@ -835,7 +835,10 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         private transient Node lastWaiter;
 
         //-------------------------------------------------  Static Variables
-        // 当从await出来时，需要再次interrupt
+        /**
+         * 当从await出来时，需要再次interrupt;
+         * 因为可能在Condition队列上时没有中断，但是可能在Sync队列上时中断，因此此时只需要重置中断状态
+         */
         private static final int REINTERRUPT = 1;
         // 当从await出来时，抛出异常
         private static final int THROW_IE = -1;
@@ -963,7 +966,18 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
 
         @Override
         public void awaitUninterruptibly() {
+            Node node = addConditionWaiter();
+            int savedState = fullyRelease(node);
 
+            boolean interrupted = false;
+            while (!isOnSyncQueue(node)) {
+                LockSupport.park(this);
+                if (Thread.interrupted())
+                    interrupted = true;
+            }
+
+            if (acquireQueued(node, savedState) || interrupted)
+                selfInterrupt();
         }
 
         @Override
