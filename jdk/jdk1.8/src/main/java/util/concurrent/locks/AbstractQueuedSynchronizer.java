@@ -12,6 +12,8 @@ package java.util.concurrent.locks;
 import sun.misc.Unsafe;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
@@ -605,6 +607,17 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
                 ((s = h.next) == null || s.thread != Thread.currentThread());
     }
 
+    /**
+     * Given Condition是否是当前Sync所拥有
+     *
+     * @param condition
+     * @return
+     * @throws NullPointerException
+     */
+    public final boolean owns(ConditionObject condition) {
+        return condition.isOwnedBy(this);
+    }
+
 
     /**
      * 在排他计时模式获取
@@ -752,7 +765,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
     }
 
     /**
-     * 是否被当前线程排他持有；由子类实现；
+     * 是否被当前线程(调用此方法的线程)排他持有；由子类实现；
      * 只会被 {@link ConditionObject}调用；因此支持 {@link ConditionObject}才需要实现，否则无须实现
      *
      * @return
@@ -1135,6 +1148,64 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
             Node first = firstWaiter;
             if (first != null)
                 doSignalAll(first);
+        }
+
+        /**
+         * 当前ConditionObject的实例归属的 {@link AbstractQueuedSynchronizer}
+         *
+         * @param sync
+         * @return
+         */
+        final boolean isOwnedBy(AbstractQueuedSynchronizer sync) {
+            // AbstractQueuedSynchronizer.this 获取当前ConditionObject所属的
+            // {@link AbstractQueuedSynchronizer} 实例
+            return sync == AbstractQueuedSynchronizer.this;
+        }
+
+        /**
+         * Condition队列上所有等待的线程
+         *
+         * @return
+         */
+        protected final Collection<Thread> getWaitingThreads() {
+            if (isHeldExclusively())
+                throw new IllegalMonitorStateException();
+            ArrayList<Thread> list = new ArrayList<Thread>();
+            for (Node w = firstWaiter; w != null; w = w.nextWaiter) {
+                // waitStatus状态
+                if (w.waitStatus == Node.CONDITION) {
+                    Thread t = w.thread;
+                    if (t != null)
+                        list.add(t);
+                }
+            }
+            return list;
+        }
+
+        protected final int getWaitQueueLength() {
+            if (!isHeldExclusively())
+                throw new IllegalMonitorStateException();
+            int n = 0;
+            for (Node w = firstWaiter; w != null; w = w.nextWaiter) {
+                if (w.waitStatus == Node.CONDITION)
+                    ++n;
+            }
+            return n;
+        }
+
+        /**
+         * Condition队列是否存在等待的线程
+         *
+         * @return
+         */
+        protected final boolean hasWaiters() {
+            if (!isHeldExclusively())
+                throw new IllegalMonitorStateException();
+            for (Node w = firstWaiter; w != null; w = w.nextWaiter) {
+                if (w.waitStatus == Node.CONDITION)
+                    return true;
+            }
+            return false;
         }
     }
     //-------------------------------------------------  Static Class
