@@ -93,6 +93,75 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         }
     }
 
+    /**
+     * Acquires in shared interruptible mode.
+     *
+     * @param arg the acquire argument
+     */
+    private void doAcquireSharedInterruptibly(int arg)
+            throws InterruptedException {
+        Node node = addWaiter(Node.SHARED);
+        boolean failed = true;
+        try {
+            for (; ; ) {
+                final Node p = node.predecessor();
+                if (p == head) {
+                    int r = tryAcquireShared(arg);
+                    if (r >= 0) {
+                        setHeadAndPropagate(node, r);
+                        // 因为到此处head节点已经变成node，原始的head节点 p已经可以被回收
+                        p.next = null;
+                        failed = false;
+                        return;
+                    }
+                }
+
+                if (shouldParkAfterFailedAcquire(p, node)
+                        && parkAndCheckInterrupt())
+                    throw new InterruptedException();
+            }
+        } finally {
+            if (failed)
+                cancelAcquire(node);
+        }
+    }
+
+    private boolean doAcquireSharedNanos(int arg, long nanosTimeout)
+            throws InterruptedException {
+        if (nanosTimeout <= 0L)
+            return false;
+        Node node = addWaiter(Node.SHARED);
+        long deadline = System.nanoTime() + nanosTimeout;
+
+        boolean failed = true;
+        try {
+            for (; ; ) {
+                Node p = node.predecessor();
+                if (p == head) {
+                    int r = tryAcquireShared(arg);
+                    if (r >= 0) {
+                        setHeadAndPropagate(node, r);
+                        p.next = null;
+                        failed = false;
+                        return true;
+                    }
+                }
+
+                nanosTimeout = deadline - System.nanoTime();
+                if (nanosTimeout <= 0L)
+                    return false;
+                if (shouldParkAfterFailedAcquire(p, node)
+                        && nanosTimeout > spinForTimeoutThreshold)
+                    LockSupport.parkNanos(this, nanosTimeout);
+                if (Thread.interrupted())
+                    throw new InterruptedException();
+            }
+        } finally {
+            if (failed)
+                cancelAcquire(node);
+        }
+    }
+
     private void doAcquireInterruptibly(int arg)
             throws InterruptedException {
         Node node = addWaiter(Node.EXCLUSIVE);
@@ -170,6 +239,20 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         if (tryAcquireShared(arg) < 0) {
             doAcquireShared(arg);
         }
+    }
+
+    /**
+     * 支持中断的共享模式获取
+     *
+     * @throws InterruptedException
+     */
+    public final void acquireSharedInterruptibly(int arg)
+            throws InterruptedException {
+        // 先检查中断标志, 如果中断则抛出中断异常，同时清除中断标志
+        if (Thread.interrupted())
+            throw new InterruptedException();
+        if (tryAcquireShared(arg) < 0)
+            doAcquireInterruptibly(arg);
     }
 
     /**
@@ -608,6 +691,19 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
     }
 
     /**
+     * 这个方法用在读写锁中，判断head节点的下个节点是否正在申请独占锁;
+     *
+     * @return
+     */
+    final boolean apparentlyFirstQueuedIsExclusive() {
+        Node h, s;
+        return (h = head) != null &&
+                (s = h.next) != null &&
+                !s.isShared() &&
+                s.thread != null;
+    }
+
+    /**
      * Given Condition是否是当前Sync所拥有
      *
      * @param condition
@@ -631,12 +727,38 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
             throws InterruptedException {
         // 因为在调用doAcquireNanos之前先调用tryAcquire方法,而tryAcquire方法不能立即获取会再调用
         // 此方法,所以如果同时等待时间为0,则立即返回false.
-        if (nanosTimeout < 0) {
+        if (nanosTimeout <= 0L) {
             return false;
         }
-        // 计算出等待的结束时间
-        final long deadline = System.nanoTime() + nanosTimeout;
-        return false;
+
+        Node node = addWaiter(Node.EXCLUSIVE);
+        long deadline = System.nanoTime() + nanosTimeout;
+        boolean failed = true;
+
+        try {
+            for (; ; ) {
+                Node p = node.predecessor();
+                if (p == head && tryAcquire(arg)) {
+                    setHead(node);
+                    p.next = null;
+                    failed = false;
+                    return true;
+                }
+
+                nanosTimeout = deadline - System.nanoTime();
+                if (nanosTimeout < 0)
+                    return false;
+                // 如果超时时间小于阀值，则不通过挂起线程，而是通过自旋的方式
+                if (shouldParkAfterFailedAcquire(p, node)
+                        && nanosTimeout > spinForTimeoutThreshold)
+                    LockSupport.parkNanos(this, nanosTimeout);
+                if (Thread.interrupted())
+                    throw new InterruptedException();
+            }
+        } finally {
+            if (failed)
+                cancelAcquire(node);
+        }
     }
 
     //------------------------releases
@@ -738,6 +860,25 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
     }
 
     /**
+     * 获取Sync队列上所有获取互斥获取锁的线程
+     *
+     * @return
+     */
+    public final Collection<Thread> getExclusiveQueuedThreads() {
+        ArrayList<Thread> list = new ArrayList<>();
+        // 因为先设置pre，后设置next，之间存在时间差，所以逆序遍历
+        for (Node p = tail; p != null; p = p.prev) {
+            if (!p.isShared()) {
+                Thread t = p.thread;
+                if (t != null) {
+                    list.add(t);
+                }
+            }
+        }
+        return list;
+    }
+
+    /**
      * 判断Node是否是在Sync Queue；
      *
      * @return
@@ -762,6 +903,37 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
                 return false;
             t = t.prev;
         }
+    }
+
+    /**
+     * 获取第一个等待的线程
+     *
+     * @return
+     */
+    private Thread fullGetFirstQueuedThread() {
+        /**
+         * 需要考虑并发的场景，因为其他线程可能在并发的修改Sync队列;
+         * 因为CPU是多核并且是线程切换轮流占有CPU执行的
+         */
+        Node h, s;
+        Thread st;
+        // 因为并发/并行的场景,所以执行两遍同样的规则
+        if (((h = head) != null && (s = h.next) != null
+                && s.prev == head && (st = s.thread) != null)
+                || ((h = head) != null && (s = h.next) != null
+                && s.prev == head && (st = s.thread) != null))
+            return st;
+
+        // 如果快速获取失败，则遍历整个Sync队列
+        Node t = tail;
+        Thread firstThread = null;
+        while (t != null && t != head) {
+            Thread tt = t.thread;
+            if (tt != null)
+                firstThread = t.thread;
+            t = t.prev;
+        }
+        return firstThread;
     }
 
     /**
