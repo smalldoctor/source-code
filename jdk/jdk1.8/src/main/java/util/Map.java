@@ -1,5 +1,7 @@
 package java.util;
 
+import java.io.Serializable;
+
 /**
  * 用于key/value映射；不能存在相同key，一个key至多映射到一个value;
  * <p>
@@ -172,5 +174,33 @@ public interface Map<K, V> {
          * entry
          */
         boolean equals(Object o);
+
+        /**
+         * hash code的计算规则：
+         * ((e.getKey() == null)? 0 : e.getKey().hashCode()) ^
+         * ((e.getValue() == null)? 0 : e.getValue().hashCode())
+         *
+         * @return
+         */
+        int hashCode();
+
+        /**
+         * 返回一个 {@link Comparator},用于比较Entry；按照Key进行比较;
+         * 如果key为空，则返回 {@link NullPointerException}
+         *
+         * @param <K>
+         * @param <V>
+         * @return
+         * @since 1.8
+         */
+        public static <K extends Comparable<? super K>, V> Comparator<Map.Entry<K, V>> comparingByKey() {
+            return (Comparator<Map.Entry<K, V>> & Serializable)
+                    (c1, c2) -> c1.getKey().compareTo(c2.getKey());
+        }
+
+        public static <K, V extends Comparable<? super V>> Comparator<Map.Entry<K, V>> comparingByValue() {
+            return (Comparator<Map.Entry<K, V>> & Serializable)
+                    (c1, c2) -> c1.getValue().compareTo(c2.getValue());
+        }
     }
 }
