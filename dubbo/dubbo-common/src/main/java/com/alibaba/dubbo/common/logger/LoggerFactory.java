@@ -15,7 +15,7 @@
  */
 package com.alibaba.dubbo.common.logger;
 
-import com.alibaba.dubbo.common.extension.ExtensionLoader;
+//import com.alibaba.dubbo.common.extension.ExtensionLoader;
 import com.alibaba.dubbo.common.logger.jcl.JclLoggerAdapter;
 import com.alibaba.dubbo.common.logger.jdk.JdkLoggerAdapter;
 import com.alibaba.dubbo.common.logger.log4j.Log4jLoggerAdapter;
@@ -70,7 +70,7 @@ public class LoggerFactory {
 
     public static void setLoggerAdapter(String loggerAdapter) {
         if (loggerAdapter != null && loggerAdapter.length() > 0) {
-            setLoggerAdapter(ExtensionLoader.getExtensionLoader(LoggerAdapter.class).getExtension(loggerAdapter));
+//            setLoggerAdapter(ExtensionLoader.getExtensionLoader(LoggerAdapter.class).getExtension(loggerAdapter));
         }
     }
 
