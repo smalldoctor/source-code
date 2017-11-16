@@ -15,7 +15,7 @@
  */
 package com.alibaba.dubbo.common.logger;
 
-import com.alibaba.dubbo.common.extension.SPI;
+//import com.alibaba.dubbo.common.extension.SPI;
 
 import java.io.File;
 
@@ -24,7 +24,7 @@ import java.io.File;
  *
  * @author william.liangf
  */
-@SPI
+//@SPI
 public interface LoggerAdapter {
 
     /**
