@@ -4,6 +4,10 @@ import java.util.concurrent.Executor;
 
 /**
  * 对Protocol的通用能力的抽象；
+ * 此处是本质是对协议进行处理，并不是定义协议；
+ * <p>
+ * 1. 实现类必须包含无参构造器，因为 {@link org.apache.catalina.connector.Connector}
+ * 通过反射获取无参构造器创建实例
  */
 public interface ProtocolHandler {
     public void getAdapter();
