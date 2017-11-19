@@ -211,4 +211,15 @@ public class Digest {
             }
         }
     }
+
+    @Test
+    public void testClassLoader() {
+        ClassLoader cls = Thread.currentThread().getContextClassLoader();
+        while (cls != null) {
+            System.out.println(cls.toString());
+            cls = cls.getParent();
+        }
+        System.out.println(System.getProperty("java.ext.dirs"));
+        System.out.println(System.getProperty("java.class.path"));
+    }
 }
