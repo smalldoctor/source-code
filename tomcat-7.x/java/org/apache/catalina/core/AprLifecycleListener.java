@@ -36,7 +36,7 @@ public class AprLifecycleListener implements LifecycleListener {
     }
 
     //-------------------------------------------------  Static Methods
-    public boolean isAprAvailable() {
+    public static boolean isAprAvailable() {
         /**
          * 因为 {@link AprLifecycleListener#isAprAvailable()}在Connector初始化时会被调用，但是在实际
          * 场景中可能不启用Apr，所以Apr不会进行初始化动作，如果不加 {@code instanceCreated}会导致

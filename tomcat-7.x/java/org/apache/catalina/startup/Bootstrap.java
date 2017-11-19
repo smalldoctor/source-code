@@ -26,11 +26,21 @@ public final class Bootstrap {
     private static Bootstrap daemon = null;
 
     private static Object catalinaDaemon = null;
-
-    //---类加载器
+    /**
+     * commonLoader：
+     * 1. 父加载器是系统类加载器
+     * <p>
+     * catalinaLoader：
+     * 1. catalina.properties 未配置相关路径，所以默认是commonLoader
+     * <p>
+     * sharedLoader
+     * 1. catalina.properties 未配置相关路径，所以默认是commonLoader
+     */
+    //---类加载器，常见类公用类加载器
     ClassLoader commonLoader = null;
     // 容器类加载器
     ClassLoader catalinaLoader = null;
+    // 共享类加载器
     ClassLoader sharedLoader = null;
 
     public static void main(String[] args) throws ClassNotFoundException {
@@ -171,7 +181,9 @@ public final class Bootstrap {
      */
     public void init() throws Exception {
         // set Catalina path
+        // home 是安装目录
         setCatalinaHome();
+        // base 是工作目录
         setCatalinaBase();
 
         // 初始化类加载器
@@ -258,7 +270,7 @@ public final class Bootstrap {
     private ClassLoader createClassLoader(String name, ClassLoader parentLoader) throws Exception {
         /**
          * classLoader的配置;每个classLoader负责加载的jar,即类
-         * 如果loader没有配置，则用父类加载器
+         * 如果.loader没有配置，则用父类加载器
          */
         String value = CatalinaProperties.getProperty(name + ".loader");
         if ((value == null) || (value.equals(""))) {

@@ -1,5 +1,6 @@
 package org.apache.catalina.connector;
 
+import org.apache.catalina.core.AprLifecycleListener;
 import org.apache.catalina.util.LifecycleMBeanBase;
 import org.apache.coyote.ProtocolHandler;
 import org.apache.juli.logging.Log;
@@ -59,9 +60,34 @@ public class Connector extends LifecycleMBeanBase {
 
     /**
      * 设定协议的处理器
+     * <p>
+     * 1. 可以是HTTP/1.1，AJP/1.3或者具体的类名
      */
     public void setProtocol(String protocol) {
-
+        if (AprLifecycleListener.isAprAvailable()) {
+            if ("HTTP/1.1".equals(protocol)) {
+                setProtocolHandlerClassName
+                        ("org.apache.coyote.http11.Http11AprProtocol");
+            } else if ("AJP/1.3".equals(protocol)) {
+                setProtocolHandlerClassName
+                        ("org.apache.coyote.ajp.AjpAprProtocol");
+            } else if (protocol != null) {
+                setProtocolHandlerClassName(protocol);
+            } else {
+                setProtocolHandlerClassName
+                        ("org.apache.coyote.http11.Http11AprProtocol");
+            }
+        } else {
+            if ("HTTP/1.1".equals(protocol)) {
+                setProtocolHandlerClassName
+                        ("org.apache.coyote.http11.Http11Protocol");
+            } else if ("AJP/1.3".equals(protocol)) {
+                setProtocolHandlerClassName
+                        ("org.apache.coyote.ajp.AjpProtocol");
+            } else if (protocol != null) {
+                setProtocolHandlerClassName(protocol);
+            }
+        }
     }
 
     public String getProtocolHandlerClassName() {

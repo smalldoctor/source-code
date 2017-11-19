@@ -15,6 +15,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+/**
+ * 扩展类加载器（sun.misc.Launcher$ExtClassLoader）：
+ * System.getProperty("java.ext.dirs")
+ * <p>
+ * 系统类加载器（sun.misc.Launcher$AppClassLoader）：
+ * System.getProperty("java.class.path")
+ */
 public class ClassLoaderFactory {
     private static final Log log = LogFactory.getLog(ClassLoaderFactory.class);
 
@@ -63,6 +70,7 @@ public class ClassLoaderFactory {
                         log.debug("  Including jar file " + url);
                     set.add(url);
                 } else if (repository.getType() == RepositoryType.GLOB) {
+                    // 获取目录下面的所有的jar包，即以.jar结尾的文件
                     File directory = new File(repository.getLocation());
                     directory = directory.getCanonicalFile();
                     if (!validateFile(directory, RepositoryType.GLOB)) {
@@ -105,6 +113,7 @@ public class ClassLoaderFactory {
                     @Override
                     public URLClassLoader run() {
                         if (parent == null)
+                            // {@link URLClassLoader}的默认父加载器是 系统类加载器
                             return new URLClassLoader(array);
                         else
                             return new URLClassLoader(array, parent);
