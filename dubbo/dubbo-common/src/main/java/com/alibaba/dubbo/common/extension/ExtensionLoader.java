@@ -2,6 +2,7 @@ package com.alibaba.dubbo.common.extension;
 
 import com.alibaba.dubbo.common.logger.Logger;
 import com.alibaba.dubbo.common.logger.LoggerFactory;
+import com.alibaba.dubbo.common.utils.Holder;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -27,6 +28,16 @@ public class ExtensionLoader<T> {
 
     private final ExtensionFactory objectFactory;
 
+    /**
+     * 自适器通过代理动态生成，是耗时的动作，因此缓存
+     */
+    private final Holder<Object> cachedAdaptiveInstance = new Holder<>();
+
+    private volatile Class<?> cachedAdaptiveClass = null;
+
+    // 扩展点自适器创建异常时记录异常
+    private volatile Throwable createAdaptiveInstanceError;
+
     private ExtensionLoader(Class<?> type) {
         this.type = type;
         /*
@@ -39,7 +50,31 @@ public class ExtensionLoader<T> {
 
     //-------------------------------------------------  Static Methods
     public static <T> ExtensionLoader<T> getExtensionLoader(Class<T> type) {
-        return null;
+
+        // null
+        if (type == null)
+            throw new IllegalArgumentException("Extension type == null");
+
+        // 必须是接口
+        if (!type.isInterface())
+            throw new IllegalArgumentException("Extension type(" + type + ") is not interface!");
+
+        // 必须包含@SPI的注解,即必须是扩展点
+        if (!withExtensionAnnotation(type))
+            throw new IllegalArgumentException("Extension type(" + type +
+                    ") is not extension, because WITHOUT @" + SPI.class.getSimpleName() + " Annotation!");
+
+        ExtensionLoader<T> loader = (ExtensionLoader<T>) EXTENSION_LOADERS.get(type);
+        if (loader == null) {
+            // 直接new 一个ExtensionLoader
+            EXTENSION_LOADERS.put(type, new ExtensionLoader<>(type));
+            loader = (ExtensionLoader<T>) EXTENSION_LOADERS.get(type);
+        }
+        return loader;
+    }
+
+    private static <T> boolean withExtensionAnnotation(Class<T> type) {
+        return type.isAnnotationPresent(SPI.class);
     }
 
     //-------------------------------------------------  Instance Variables
@@ -52,6 +87,27 @@ public class ExtensionLoader<T> {
      * @return
      */
     public T getAdaptiveExtension() {
+        // 从缓存中获取自适器
+        Object instance = cachedAdaptiveInstance.get();
+        if (instance == null) {
+            // 不存在缓存的自适器时，判断是否是自适器创建错误
+            if (createAdaptiveInstanceError == null) {
+                synchronized (cachedAdaptiveInstance) {
+                    instance = cachedAdaptiveInstance.get();
+                    if (instance == null) {
+                        try {
+                            // TODO 创建 Adaptive
+                            cachedAdaptiveInstance.set(instance);
+                        } catch (Throwable t) {
+                            createAdaptiveInstanceError = t;
+                            throw new IllegalStateException("fail to create adaptive instance: " + t.toString(), t);
+                        }
+                    }
+                }
+            } else {
+                throw new IllegalStateException("fail to create adaptive instance: " + createAdaptiveInstanceError.toString(), createAdaptiveInstanceError);
+            }
+        }
         return null;
     }
 }
