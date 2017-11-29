@@ -4,6 +4,7 @@ import com.alibaba.dubbo.common.logger.Logger;
 import com.alibaba.dubbo.common.logger.LoggerFactory;
 import com.alibaba.dubbo.common.utils.Holder;
 
+import java.lang.reflect.Method;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -13,6 +14,10 @@ import java.util.concurrent.ConcurrentMap;
  * 2. 自动Wrap扩展点
  * 3. 默认获取到是Adaptive Instance,Adaptive Instance 根据Adapter注解的配置获取
  * 指定的扩展实现；
+ * <p>
+ * 两种获取Extension的方式:
+ * 1. 在需要自定匹配时，获取Adaptive Extension；
+ * 2. 在明确获取指定的Extension时，直接通过扩展点实现的name获取；
  */
 public class ExtensionLoader<T> {
     //-------------------------------------------------  Static Variables
@@ -29,7 +34,7 @@ public class ExtensionLoader<T> {
     private final ExtensionFactory objectFactory;
 
     /**
-     * 自适器通过代理动态生成，是耗时的动作，因此缓存
+     * 自适器通过代理动态生成，先生成源码，再编译，代价很高，因此缓存
      */
     private final Holder<Object> cachedAdaptiveInstance = new Holder<>();
 
@@ -83,6 +88,7 @@ public class ExtensionLoader<T> {
      * 每个扩展点都有自己的ExtensionLoader，通过ExtensionLoader获取
      * AdaptiveExtension；AdaptiveExtension自适应的扩展点适配器，从而从多个扩展点的实现中自动
      * 匹配准确的Extension;
+     * 在使用SPI ExtensionFactory时默认获取自适器;
      *
      * @return
      */
@@ -110,4 +116,40 @@ public class ExtensionLoader<T> {
         }
         return null;
     }
+
+    /**
+     * 创建AdaptiveExtensionClassCode；
+     * 通过外层方法的线程安全，保证当前方法的线程安全
+     *
+     * @return
+     */
+    public String createAdaptiveExtensionClassCode() {
+        StringBuilder codeBuilder = new StringBuilder();
+        // 检查是否存在 @Adaptive
+        boolean hasAdaptiveAnnotation = false;
+        Method[] methods = type.getMethods();
+        for (Method m : methods) {
+            if (m.isAnnotationPresent(Adaptive.class)) {
+                hasAdaptiveAnnotation = true;
+                break;
+            }
+        }
+        // 不存在需要
+        if (!hasAdaptiveAnnotation)
+            throw new IllegalStateException("No adaptive method on extension " + type.getName() + ", refuse to create the adaptive class!");
+
+        return null;
+    }
+
+    /**
+     * 因为是通过先获取Extension自己的ExtensionLoader，即已经知道是获取哪个类型的扩展点实现，
+     * 所以此处只需要传入name即可。
+     *
+     * @param name
+     * @return
+     */
+    public T getExtension(String name) {
+        return null;
+    }
+
 }

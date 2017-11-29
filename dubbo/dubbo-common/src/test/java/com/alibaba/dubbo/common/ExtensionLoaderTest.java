@@ -1,5 +1,6 @@
 package com.alibaba.dubbo.common;
 
+import com.alibaba.dubbo.common.extension.ExtensionFactory;
 import com.alibaba.dubbo.common.extension.ExtensionLoader;
 import org.junit.Test;
 
@@ -41,6 +42,16 @@ public class ExtensionLoaderTest {
                     allOf(containsString("com.alibaba.dubbo.common.extensionloader.NoSpiExt"),
                             containsString("is not extension"),
                             containsString("WITHOUT @SPI Annotation")));
+        }
+    }
+
+    @Test
+    public void test_createAdaptiveExtensionClassCode() {
+        try {
+            ExtensionLoader<ExtensionFactory> loader = ExtensionLoader.getExtensionLoader(ExtensionFactory.class);
+            loader.createAdaptiveExtensionClassCode();
+        }catch (IllegalStateException t){
+            System.out.println(t.getMessage());
         }
     }
 }

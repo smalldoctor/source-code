@@ -111,10 +111,10 @@ public class LRUCache<K, V> extends LinkedHashMap<K, V> {
     }
 
     @Override
-    public boolean remove(Object key, Object value) {
+    public V remove(Object key) {
         try {
             lock.lock();
-            return super.remove(key, value);
+            return super.remove(key);
         } finally {
             lock.unlock();
         }
