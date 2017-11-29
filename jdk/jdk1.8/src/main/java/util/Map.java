@@ -198,9 +198,28 @@ public interface Map<K, V> {
                     (c1, c2) -> c1.getKey().compareTo(c2.getKey());
         }
 
+        /**
+         * @param <K>
+         * @param <V>
+         * @return
+         */
         public static <K, V extends Comparable<? super V>> Comparator<Map.Entry<K, V>> comparingByValue() {
             return (Comparator<Map.Entry<K, V>> & Serializable)
                     (c1, c2) -> c1.getValue().compareTo(c2.getValue());
         }
+
+
+        /**
+         * @param cmp
+         * @param <K>
+         * @param <V>
+         * @return
+         */
+        public static <K, V> Comparator<Map.Entry<K, V>> comparingByKey(Comparator<? super K> cmp) {
+            Objects.requireNonNull(cmp);
+            return (Comparator<Map.Entry<K, V>> & Serializable)
+                    (c1, c2) -> cmp.compare(c1.getKey(), c2.getKey());
+        }
+
     }
 }
