@@ -1,5 +1,6 @@
 package com.alibaba.dubbo.common;
 
+import com.alibaba.dubbo.common.adaptive.HasAdaptiveExt;
 import com.alibaba.dubbo.common.extension.ExtensionFactory;
 import com.alibaba.dubbo.common.extension.ExtensionLoader;
 import org.junit.Test;
@@ -48,10 +49,12 @@ public class ExtensionLoaderTest {
     @Test
     public void test_createAdaptiveExtensionClassCode() {
         try {
-            ExtensionLoader<ExtensionFactory> loader = ExtensionLoader.getExtensionLoader(ExtensionFactory.class);
+            ExtensionLoader<HasAdaptiveExt> loader = ExtensionLoader.getExtensionLoader(HasAdaptiveExt.class);
             loader.createAdaptiveExtensionClassCode();
-        }catch (IllegalStateException t){
+        } catch (IllegalStateException t) {
             System.out.println(t.getMessage());
         }
     }
+
+    // 测试存在多个factory的场景
 }
