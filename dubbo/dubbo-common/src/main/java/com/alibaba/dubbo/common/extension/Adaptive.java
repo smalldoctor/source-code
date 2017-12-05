@@ -9,5 +9,10 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE, ElementType.METHOD})
 public @interface Adaptive {
+    /**
+     * 默认是空数组
+     *
+     * @return
+     */
     String[] value() default {};
 }

@@ -25,6 +25,11 @@ import java.util.concurrent.ConcurrentMap;
  * 两种创建Adaptive Extension的方式：
  * 1. 动态  通过识别方法级别@Adaptive 注解，动态生成Code，然后编译
  * 2. 静态 在解析SPI的配置文件，识别配置的类的类级别@Adaptive,并且有且只能有一个类的类级别使用@Adaptive
+ * <p>
+ * 1. 微核心，插件式
+ * 将框架本身的能力进行抽象，只保留本身的工具类，支撑类，其他都做成可扩展的存在；
+ * 对与Dubbo而言：它的核心，即整个框架的支撑类是ExtensionLoader，其他的功能应用协议，传输，序列化，调用等具体功能点都是作为可扩展的存在，插件式扩展；
+ * 本身也起着胶水捏合的作用；
  */
 public class ExtensionLoader<T> {
     //-------------------------------------------------  Static Variables
@@ -183,6 +188,7 @@ public class ExtensionLoader<T> {
                     }
                 }
 
+                // 因为Dubbo是URL贯穿整个调用过程，URL传递参数
                 //存在URL入参
                 if (urlTypeIndex != -1) {
                     // Null Point check
@@ -191,6 +197,7 @@ public class ExtensionLoader<T> {
                             urlTypeIndex);
                     code.append(s);
 
+                    // URL对象赋值给局部变量，便于后续继续生成CODE
                     s = String.format("\n%s url = arg%d;", URL.class.getName(), urlTypeIndex);
                     code.append(s);
                 } else {
@@ -215,6 +222,54 @@ public class ExtensionLoader<T> {
                                 break LBL_POINT;
                             }
                         }
+                    }
+
+                    // 没有URL的入参，也没有可以返回URL对象的入参
+                    if (attribMethod == null) {
+                        throw new IllegalStateException("fail to create adative class for interface " + type.getName()
+                                + ": not found url parameter or url attribute in parameters of method " + method.getName());
+                    }
+
+                    // 空指针检查
+                    // Null point check （包含URL对象的入参是否为空）
+                    String s = String.format("\nif (arg%d == null) throw new IllegalArgumentException(\"%s argument == null\");",
+                            urlTypeIndex, pts[urlTypeIndex].getName());
+                    code.append(s);
+                    //检查获取URL是否为空（从入参获取的URL对象是否为空）
+                    s = String.format("\nif (arg%d.%s() == null) throw new IllegalArgumentException(\"%s argument %s() == null\");",
+                            urlTypeIndex, attribMethod, pts[urlTypeIndex].getName(), attribMethod);
+                    code.append(s);
+                    // URL对象赋值给局部变量，便于后续继续生成CODE
+                    // （）括号不能失去
+                    s = String.format("%s url = arg%d.%s();", URL.class, urlTypeIndex, attribMethod);
+                    code.append(s);
+                }
+
+                // Adaptive配置的匹配参数
+                String[] value = adaptiveAnnotation.value();
+                // 如果扩展点没有配置，则使用扩展点接口名称的单词拼接
+                // 规则 : HasAdaptiveExt ->  has.adaptive.ext 作为参数名称
+                if (value.length == 0) {
+                    char[] charArray = type.getSimpleName().toCharArray();
+                    StringBuilder sb = new StringBuilder(128);
+                    for (int i = 0; i < charArray.length; i++) {
+                        if (Character.isUpperCase(charArray[i])) {
+                            if (i != 0) {
+                                sb.append(".");
+                            }
+                            sb.append(Character.isLowerCase(charArray[i]));
+                        } else {
+                            sb.append(charArray[i]);
+                        }
+                    }
+                    value = new String[]{sb.toString()};
+                }
+
+                // 是否存在Invocation
+                boolean hasInvocation = false;
+                for (int i = 0; i < pts.length; i++) {
+                    if (pts[i].getName().equals("com.alibaba.dubbo.rpc.Invocation")) {
+
                     }
                 }
             }
