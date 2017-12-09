@@ -128,4 +128,51 @@ public final class URL implements Serializable {
     public URL(String protocol, String username, String password, String host, int port, String path, String... pairs) {
         this(protocol, username, password, host, port, path, CollectionUtils.toStringMap(pairs));
     }
+
+    //-------------------------------------------------  Instance Methods
+
+    /**
+     * 取值优先级：
+     * 1. 取key对应的值
+     * 2. 取 default+"."+key
+     *
+     * @param key
+     * @return
+     */
+    public String getParameter(String key) {
+        String value = parameters.get(key);
+        if (value == null || value.length() == 0) {
+            value = parameters.get(Constants.DEFAULT_KEY_PREFIX + key);
+        }
+        return value;
+    }
+
+    public String getParameter(String key, String defaultValue) {
+        String value = getParameter(key);
+        if (value == null || value.length() == 0)
+            return defaultValue;
+        return value;
+    }
+
+    public String getMethodParameter(String method, String key) {
+        /**
+         * 取值优先级：
+         * 1.
+         * method的参数存放格式：
+         * methodName + '.' + key -> value
+         *
+         * 2. key -> value
+         */
+        String value = parameters.get(method + "." + key);
+        if (value == null || value.length() == 0)
+            value = getParameter(key);
+        return value;
+    }
+
+    public String getMethodParameter(String method, String key, String defaultValue) {
+        String value = getMethodParameter(method, key);
+        if (value == null || value.length() == 0)
+            return defaultValue;
+        return value;
+    }
 }

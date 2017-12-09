@@ -8,6 +8,7 @@ import com.sun.org.apache.xpath.internal.operations.Mod;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -52,16 +53,18 @@ public class ExtensionLoader<T> {
 
     private volatile Class<?> cachedAdaptiveClass = null;
 
+    private String cachedDefaultName;
+
     // 扩展点自适器创建异常时记录异常
     private volatile Throwable createAdaptiveInstanceError;
 
     private ExtensionLoader(Class<?> type) {
         this.type = type;
         /*
-        * 扩展点分为两类：
-        * 1. ExtensionFactory ExtensionFactory本身也是一个扩展点，可以通过Dubbo的SPI机制进行自定义
-        * 2. Extension 其他非ExtensionFactory的扩展点
-        * */
+         * 扩展点分为两类：
+         * 1. ExtensionFactory ExtensionFactory本身也是一个扩展点，可以通过Dubbo的SPI机制进行自定义
+         * 2. Extension 其他非ExtensionFactory的扩展点
+         * */
         this.objectFactory = (type == ExtensionFactory.class ? null : ExtensionLoader.getExtensionLoader(ExtensionFactory.class).getAdaptiveExtension());
     }
 
@@ -139,7 +142,7 @@ public class ExtensionLoader<T> {
      * @return
      */
     public String createAdaptiveExtensionClassCode() {
-        StringBuilder codeBuilder = new StringBuilder();
+        StringBuilder codeBuidler = new StringBuilder();
         // 检查是否存在 @Adaptive
         boolean hasAdaptiveAnnotation = false;
         Method[] methods = type.getMethods();
@@ -155,12 +158,12 @@ public class ExtensionLoader<T> {
 
         //构建动态类的源码
         // 包名
-        codeBuilder.append("package " + type.getPackage().getName() + ";");
+        codeBuidler.append("package " + type.getPackage().getName() + ";");
         // 导入
         // 因为动态获取真正的Extension实现需要通过ExtensionLoader获取扩展点实现
-        codeBuilder.append("\nimport " + ExtensionLoader.class.getName() + ";");
+        codeBuidler.append("\nimport " + ExtensionLoader.class.getName() + ";");
         // 类名
-        codeBuilder.append("\npublic class " + type.getSimpleName() + "$Adaptive"
+        codeBuidler.append("\npublic class " + type.getSimpleName() + "$Adaptive"
                 + " implement " + type.getCanonicalName() + " {\n");
 
         // 构建代理类的类体,因为是实现接口的动态类，所以只要处理方法即可
@@ -257,7 +260,7 @@ public class ExtensionLoader<T> {
                             if (i != 0) {
                                 sb.append(".");
                             }
-                            sb.append(Character.isLowerCase(charArray[i]));
+                            sb.append(Character.toLowerCase(charArray[i]));
                         } else {
                             sb.append(charArray[i]);
                         }
@@ -269,13 +272,130 @@ public class ExtensionLoader<T> {
                 boolean hasInvocation = false;
                 for (int i = 0; i < pts.length; i++) {
                     if (pts[i].getName().equals("com.alibaba.dubbo.rpc.Invocation")) {
-
+                        String s = String.format("\nif(arg%d == null) throw new IllegalArgumentException(\"invocation == null\");", i);
+                        code.append(s);
+                        s = String.format("\n String methodName = arg%d.getMethodName();", i);
+                        code.append(s);
+                        hasInvocation = true;
+                        break;
                     }
                 }
+
+                /**
+                 * 在Adaptive自适应时，依据配置SPI的默认扩展实现以及Adaptive配置的key：
+                 * 1. SPI的默认值值
+                 * 2. 依据Adaptive配置的key的顺序，优先级逐渐降低
+                 * SPI("Impl1");Adaptive({"key1","key2"})
+                 * -->url.getParameter("key1", url.getParameter("key2", "impl1"))
+                 *
+                 * 如果存在Invocation，则都是用getMethodParameter包含默认值的
+                 */
+                String defaultExtName = cachedDefaultName;
+                String getNameCode = null;
+                for (int i = value.length - 1; i >= 0; i--) {
+                    if (i == value.length - 1) {
+                        // 最后一个key,需要考虑默认值
+                        if (defaultExtName != null) {
+                            // 如果存在默认扩展点
+                            if (!"protocol".equals(value[i])) {
+                                if (hasInvocation) {
+                                    // 如果存在Invocation，则是获取method parameter
+                                    getNameCode = String.format("url.getMethodParameter(methodName,\"%s\",\"%s\")", value[i], defaultExtName);
+                                } else {
+                                    getNameCode = String.format("url.getParameter(\"%s\",\"%s\")", value[i], defaultExtName);
+                                }
+                            } else {
+                                // 如果是protocol直接使用URL.getProtocol
+                                getNameCode = String.format("url.getProtocol() == null ? \"%s\" : url.getProtocol()", defaultExtName);
+                            }
+                        } else {
+                            if (!"protocol".equals(value[i])) {
+                                if (hasInvocation) {
+                                    // 如果存在Invocation，则是获取method parameter
+                                    getNameCode = String.format("url.getMethodParameter(methodName,\"%s\",\"%s\")", value[i], defaultExtName);
+                                } else {
+                                    getNameCode = String.format("url.getParameter(\"%s\")", value[i]);
+                                }
+                            } else {
+                                // 如果是protocol直接使用URL.getProtocol
+                                getNameCode = "url.getProtocol()";
+                            }
+                        }
+                    } else {
+                        if (!"protocol".equals(value[i])) {
+                            if (hasInvocation) {
+                                // 如果存在Invocation，则是获取method parameter
+                                getNameCode = String.format("url.getMethodParameter(methodName,\"%s\",\"%s\")", value[i], defaultExtName);
+                            } else {
+                                getNameCode = String.format("url.getParameter(\"%s\",\"%s\")", value[i], getNameCode);
+                            }
+                        } else {
+                            getNameCode = String.format("url.getProtocol() == null ? (%s) : url.getProtocol()", getNameCode);
+                        }
+                    }
+                }
+                code.append("\nString extName = ").append(getNameCode).append(";");
+                String s = String.format("\nif(extName == null) " +
+                                "throw new IllegalStateException(\"Fail to get extension(%s) name from url(\" + url.toString() + \") use keys(%s)\");",
+                        type.getName(), Arrays.toString(value));
+                code.append(s);
+
+                //获取指定的扩展点
+                s = String.format("\n%s extension = (%<s)%s.getExtensionLoad(%s).getExtension();",
+                        type.getName(), ExtensionLoader.class.getSimpleName(), type.getName());
+                code.append(s);
+
+                // 构建方法体返回值
+                if (!rt.equals(void.class)) {
+                    code.append("\nreturn ");
+                }
+
+                s = String.format("\n extension.%s(", method.getName());
+                code.append(s);
+                for (int i = 0; i < pts.length; i++) {
+                    Class<?> pt = pts[i];
+                    // 此处是直接调用
+                    if (i != 0) {
+                        code.append(",");
+                    }
+                    code.append("arg").append(i);
+                }
+                code.append(");");
             }
+
+            codeBuidler.append("\npublic " + rt.getCanonicalName() + " " + method.getName() + "(");
+            for (int i = 0; i < pts.length; i++) {
+                Class<?> pt = pts[i];
+                if (i > 0) {
+                    codeBuidler.append(",");
+                }
+                codeBuidler.append(pt.getCanonicalName());
+                codeBuidler.append(" ");
+                codeBuidler.append("arg" + i);
+            }
+            codeBuidler.append(")");
+
+            // 处理异常
+            if (ets.length > 0) {
+                codeBuidler.append(" throws ");
+                for (int i = 0; i < ets.length; i++) {
+                    Class<?> et = ets[i];
+                    if (i > 0) {
+                        codeBuidler.append(", ");
+                    }
+                    codeBuidler.append(et.getCanonicalName());
+                }
+            }
+
+            codeBuidler.append(" {");
+            codeBuidler.append(code.toString());
+            codeBuidler.append("\n}");
         }
 
-        logger.error("\n" + codeBuilder.toString() + "\n");
+        codeBuidler.append("\n}");
+        if (logger.isDebugEnabled()) {
+            logger.debug(codeBuidler.toString());
+        }
         return null;
     }
 
