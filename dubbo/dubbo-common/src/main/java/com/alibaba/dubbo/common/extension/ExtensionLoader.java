@@ -6,11 +6,14 @@ import com.alibaba.dubbo.common.logger.LoggerFactory;
 import com.alibaba.dubbo.common.utils.Holder;
 import com.sun.org.apache.xpath.internal.operations.Mod;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.Arrays;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.regex.Pattern;
 
 /**
  * Dubbo的扩展点获取的工具类；
@@ -41,10 +44,14 @@ public class ExtensionLoader<T> {
      */
     private static final ConcurrentMap<Class<?>, ExtensionLoader<?>> EXTENSION_LOADERS = new ConcurrentHashMap<>();
 
+    private static final Pattern NAME_SEPARATOR = Pattern.compile("\\s*[,]+\\s*");
+
     //-------------------------------------------------  Instance Variables
     private final Class<?> type;
 
     private final ExtensionFactory objectFactory;
+
+    private Set<Class<?>> cachedWrapperClasses;
 
     /**
      * 自适器通过代理动态生成，先生成源码，再编译，代价很高，因此缓存
@@ -54,6 +61,9 @@ public class ExtensionLoader<T> {
     private volatile Class<?> cachedAdaptiveClass = null;
 
     private String cachedDefaultName;
+
+    // 用来存放在解析扩展点配置文件时出错的行
+    private Map<String, IllegalStateException> exceptions = new ConcurrentHashMap<String, IllegalStateException>();
 
     // 扩展点自适器创建异常时记录异常
     private volatile Throwable createAdaptiveInstanceError;
@@ -69,6 +79,16 @@ public class ExtensionLoader<T> {
     }
 
     //-------------------------------------------------  Static Methods
+
+    /**
+     * 使用ExtensionLoader的加载器
+     *
+     * @return
+     */
+    private static ClassLoader findClassLoader() {
+        return ExtensionLoader.class.getClassLoader();
+    }
+
     public static <T> ExtensionLoader<T> getExtensionLoader(Class<T> type) {
 
         // null
@@ -133,8 +153,7 @@ public class ExtensionLoader<T> {
     }
 
     /**
-     * 动态
-     * 创建AdaptiveExtensionClassCode；
+     * 动态创建AdaptiveExtension的源码；
      * 通过外层方法的线程安全，保证当前方法的线程安全;
      * <p>
      * 自适应Extension类用于通过URL，获取指定的参数，动态的匹配扩展点实现；
@@ -407,7 +426,130 @@ public class ExtensionLoader<T> {
      * @return
      */
     public T getExtension(String name) {
+        if (name == null || name.length() == 0)
+            throw new IllegalArgumentException("Extension name == null");
+        // 如果name==true，则获取默认扩展点
+        if (name.equals("true"))
+            return getDefaultExtension();
         return null;
+    }
+
+    public T getDefaultExtension() {
+        return null;
+    }
+
+    private Map<String, Class<?>> loadExtensionClasses() {
+        // 获取默认的extension
+        final SPI defaultAnnotation = type.getAnnotation(SPI.class);
+        if (defaultAnnotation != null) {
+            String value = defaultAnnotation.value();
+            // 剔除两边的空格
+            if (value != null && (value = value.trim()).length() > 0) {
+                String[] names = NAME_SEPARATOR.split(value);
+                if (names.length > 1) {
+                    throw new IllegalStateException("more than 1 default extension name on extension" + type.getName()
+                            + ":" + Arrays.toString(names));
+                }
+                if (names.length == 1)
+                    cachedDefaultName = names[0];
+            }
+        }
+
+        // 获取扩展点的配置信息
+        Map<String, Class<?>> extensionClasses = new HashMap<>();
+        // DUBBO INTER DIRECTORY
+        // DUBBO DIRECTORY
+        // SERVICES DIRECTORY
+        return extensionClasses;
+    }
+
+    private void loadFile(Map<String, Class<?>> extensionClass, String dir) {
+        // 不论在什么目录下，都是扩展点类的全路径名
+        String fileName = dir + type.getName();
+        try {
+            // 因为服务的实现可能存在多个版本，即存在多个扩展点的实现
+            Enumeration<java.net.URL> urls;
+            ClassLoader classLoader = findClassLoader();
+            if (classLoader != null) {
+                urls = classLoader.getResources(fileName);
+            } else {
+                urls = ClassLoader.getSystemResources(fileName);
+            }
+            if (urls != null) {
+                while (urls.hasMoreElements()) {
+                    java.net.URL url = urls.nextElement();
+                    try {
+                        // 要求每个配置文件必须是UTF-8的格式
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(url.openStream(), "utf-8"));
+                        try {
+                            String line = null;
+                            while ((line = reader.readLine()) != null) {
+                                final int ci = line.indexOf('#');
+                                // 只会取 # 前面的一段
+                                if (ci >= 0) line = line.substring(0, ci);
+                                line = line.trim();
+                                if (line.length() > 0) {
+                                    try {
+                                        String name = null;
+                                        int i = line.indexOf("=");
+                                        if (i > 0) {
+                                            name = line.substring(0, i).trim();
+                                            line = line.substring((i + 1)).trim();
+                                        }
+                                        if (line.length() > 0) {
+                                            Class<?> clazz = Class.forName(line, true, classLoader);
+                                            // clazz 是否是 type的子类型
+                                            if (!type.isAssignableFrom(clazz)) {
+                                                throw new IllegalStateException("Error when load extension class(interface: " +
+                                                        type + ", class line: " + clazz.getName() + "), class "
+                                                        + clazz.getName() + "is not subtype of interface.");
+                                            }
+                                            // 判断是自定义的自适器;
+                                            // 只能存在一个自适器，不可以存在多个
+                                            if (clazz.isAnnotationPresent(Adaptive.class)) {
+                                                if (cachedAdaptiveClass == null) {
+                                                    cachedAdaptiveClass = clazz;
+                                                } else if (!cachedAdaptiveClass.equals(clazz)) {
+                                                    throw new IllegalStateException("More than 1 adaptive class found: "
+                                                            + cachedAdaptiveClass.getClass().getName()
+                                                            + ", " + clazz.getClass().getName());
+                                                }
+                                            } else {
+                                                // 如果是type(是接口)的实现类,且存在以接口作为参数的构造器，则是包装器;
+                                                // 实现AOP
+                                                try {
+                                                    clazz.getConstructor(type);
+//                                                    Set<Class<?>> wrappers = new ConcurrentHashSet
+                                                } catch (NoSuchMethodException e) {
+
+                                                }
+                                            }
+                                        }
+                                    } catch (Throwable t) {
+                                        IllegalStateException e = new IllegalStateException("Failed to load extension class(interface: " + type + ", class line: " + line + ") in " + url + ", cause: " + t.getMessage(), t);
+                                        exceptions.put(line, e);
+                                    }
+                                }
+                            }
+                        } finally {
+                            // 文件流必须关闭
+                            reader.close();
+                        }
+                    } catch (Throwable t) {
+                        logger.error("Exception when load extension class(interface: " +
+                                type + ", class file: " + url + ") in " + url, t);
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            logger.error("Exception when load extension class(interface: " +
+                    type + ", description file: " + fileName + ").", t);
+        }
+    }
+
+    @Override
+    public String toString() {
+        return this.getClass().getName() + "[" + type.getName() + "]";
     }
 
 }
