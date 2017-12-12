@@ -3,8 +3,8 @@ package com.alibaba.dubbo.common.extension;
 import com.alibaba.dubbo.common.URL;
 import com.alibaba.dubbo.common.logger.Logger;
 import com.alibaba.dubbo.common.logger.LoggerFactory;
+import com.alibaba.dubbo.common.utils.ConcurrentHashSet;
 import com.alibaba.dubbo.common.utils.Holder;
-import com.sun.org.apache.xpath.internal.operations.Mod;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -44,11 +44,19 @@ public class ExtensionLoader<T> {
      */
     private static final ConcurrentMap<Class<?>, ExtensionLoader<?>> EXTENSION_LOADERS = new ConcurrentHashMap<>();
 
+    /**
+     * 全局的缓存扩展点实现类的对象，即每个扩展点实现是单实例的
+     */
+    private static final ConcurrentHashMap<Class<?>, Object> EXTENSION_INSTANCES = new ConcurrentHashMap<>();
+
     private static final Pattern NAME_SEPARATOR = Pattern.compile("\\s*[,]+\\s*");
 
     //-------------------------------------------------  Instance Variables
     private final Class<?> type;
 
+    /**
+     * 用于在自动注入依赖的扩展点时，获取依赖的扩展点
+     */
     private final ExtensionFactory objectFactory;
 
     private Set<Class<?>> cachedWrapperClasses;
@@ -59,6 +67,28 @@ public class ExtensionLoader<T> {
     private final Holder<Object> cachedAdaptiveInstance = new Holder<>();
 
     private volatile Class<?> cachedAdaptiveClass = null;
+
+    // 自激活的扩展点;根据自激活的条件判断激活，然后根据name寻找扩展点
+    /**
+     * name1 -> activate1
+     * name2 -> activate2
+     */
+    private final Map<String, Activate> cachedActivates = new ConcurrentHashMap<>();
+    /**
+     * clazz1 -> name1
+     * clazz2 -> name2
+     */
+    private final ConcurrentHashMap<Class<?>, String> cachedNames = new ConcurrentHashMap<>();
+    /**
+     * name1 -> clazz1
+     * name2 -> clazz1   =》这种情况在{@link #cachedNames}只会存放 clazz1 -> name1
+     * name3 -> clazz2
+     * name4 -> clazz3
+     * 但是不允许
+     * name1 -> clazz1
+     * name1 -> clazz2
+     */
+    private final Holder<Map<String, Class<?>>> cachedClasses = new Holder<>();
 
     private String cachedDefaultName;
 
@@ -463,6 +493,17 @@ public class ExtensionLoader<T> {
         return extensionClasses;
     }
 
+    /**
+     * 文件中基本格式（不考虑使用过时的Extension注解的场景）：
+     * 1. name1,name2...=class#...
+     * <p>
+     * 2. class#...
+     * 3. class
+     * =》如果实现类的名字以接口名称结尾，则实现类名除去接口名称的之后的名字；否则直接实现类的名字
+     *
+     * @param extensionClass
+     * @param dir
+     */
     private void loadFile(Map<String, Class<?>> extensionClass, String dir) {
         // 不论在什么目录下，都是扩展点类的全路径名
         String fileName = dir + type.getName();
@@ -519,9 +560,49 @@ public class ExtensionLoader<T> {
                                                 // 实现AOP
                                                 try {
                                                     clazz.getConstructor(type);
-//                                                    Set<Class<?>> wrappers = new ConcurrentHashSet
+                                                    Set<Class<?>> wrappers = cachedWrapperClasses;
+                                                    if (wrappers == null) {
+                                                        wrappers = new ConcurrentHashSet<>();
+                                                        cachedWrapperClasses = wrappers;
+                                                    }
+                                                    wrappers.add(clazz);
                                                 } catch (NoSuchMethodException e) {
-
+                                                    // Extension的实现;必须存在无参构造器
+                                                    clazz.getConstructor();
+                                                    if (name == null || name.length() == 0) {
+                                                        name = finaAnnotationName(clazz);
+                                                        // 如果使用了老的Extension注解，但是没有配置默认值,则还有可能是null
+                                                        if (name == null || name.length() == 0) {
+                                                            if (clazz.getSimpleName().length() > type.getSimpleName().length()
+                                                                    && clazz.getSimpleName().endsWith(type.getSimpleName())) {
+                                                                name = clazz.getSimpleName().substring(0, clazz.getSimpleName().length() - type.getSimpleName().length()).toLowerCase();
+                                                            } else {
+                                                                throw new IllegalStateException("No such extension name for the class " + clazz.getName() + " in the config " + url);
+                                                            }
+                                                        }
+                                                    }
+                                                    String[] names = NAME_SEPARATOR.split(name);
+                                                    /**
+                                                     * 扩展点必须有NAME
+                                                     */
+                                                    if (names != null && names.length > 0) {
+                                                        Activate activate = clazz.getAnnotation(Activate.class);
+                                                        if (activate != null) {
+                                                            cachedActivates.put(names[0], activate);
+                                                        }
+                                                        for (String n : names) {
+                                                            if (!cachedNames.containsKey(clazz)) {
+                                                                cachedNames.put(clazz, n);
+                                                            }
+                                                            Class<?> c = extensionClass.get(n);
+                                                            if (c == null) {
+                                                                extensionClass.put(n, clazz);
+                                                            } else if (c != clazz) {
+                                                                throw new IllegalStateException("Duplicate extension " +
+                                                                        type.getName() + " name " + n + " on " + c.getName() + " and " + clazz.getName());
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -545,6 +626,19 @@ public class ExtensionLoader<T> {
             logger.error("Exception when load extension class(interface: " +
                     type + ", description file: " + fileName + ").", t);
         }
+    }
+
+    private String finaAnnotationName(Class<?> clazz) {
+        Extension extension = clazz.getAnnotation(Extension.class);
+        if (extension == null) {
+            String name = clazz.getSimpleName();
+            // 如果扩展点的实现以 xxx + type的名字
+            if (name.endsWith(type.getSimpleName())) {
+                name = name.substring(0, name.length() - type.getSimpleName().length());
+            }
+            return name.toLowerCase();
+        }
+        return extension.value();
     }
 
     @Override
