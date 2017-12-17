@@ -51,8 +51,16 @@ public class ExtensionLoader<T> {
 
     private static final Pattern NAME_SEPARATOR = Pattern.compile("\\s*[,]+\\s*");
 
+    private static final String SERVICES_DIRECTORY = "META-INF/services/";
+
+    private static final String DUBBO_DIRECTORY = "META-INF/dubbo/";
+
+    private static final String DUBBO_INTERNAL_DIRECTORY = DUBBO_DIRECTORY + "/internal/";
+
     //-------------------------------------------------  Instance Variables
     private final Class<?> type;
+
+    private final ConcurrentHashMap<String, Holder<Object>> cachedInstances = new ConcurrentHashMap<>();
 
     /**
      * 用于在自动注入依赖的扩展点时，获取依赖的扩展点
@@ -72,14 +80,20 @@ public class ExtensionLoader<T> {
     /**
      * name1 -> activate1
      * name2 -> activate2
+     * <p>
+     * 如果在配置文件中为同一个类指定多个名字，则使用第一个名字，如name1,name3=activate1
      */
     private final Map<String, Activate> cachedActivates = new ConcurrentHashMap<>();
     /**
      * clazz1 -> name1
      * clazz2 -> name2
+     * <p>
+     * 如果在配置文件中为同一个类指定多个名字，则使用第一个名字，如name1,name3=clazz1
      */
     private final ConcurrentHashMap<Class<?>, String> cachedNames = new ConcurrentHashMap<>();
     /**
+     * 可以同时指定多个名字:
+     * 如name1,name2=clazz1
      * name1 -> clazz1
      * name2 -> clazz1   =》这种情况在{@link #cachedNames}只会存放 clazz1 -> name1
      * name3 -> clazz2
@@ -461,11 +475,59 @@ public class ExtensionLoader<T> {
         // 如果name==true，则获取默认扩展点
         if (name.equals("true"))
             return getDefaultExtension();
+
+        Holder<Object> holder = cachedInstances.get(name);
+        if (holder == null) {
+            cachedInstances.putIfAbsent(name, new Holder<Object>());
+            holder = cachedInstances.get(name);
+        }
+
+        Object instance = holder.get();
+        if (instance == null) {
+            // 需要谁，就以谁为锁，避免死锁和被不同锁锁定的问题
+            synchronized (holder) {
+                instance = holder.get();
+                if (instance == null) {
+                    // 创建instance
+                    holder.set(instance);
+                }
+            }
+        }
+
+        return (T) instance;
+    }
+
+    public T createExtension(String name) {
+        Class<?> clazz = getExtensionClasses().get(name);
         return null;
     }
 
     public T getDefaultExtension() {
-        return null;
+        getExtensionClasses();
+        if (cachedDefaultName == null || cachedDefaultName.length() == 0
+                || "true".equalsIgnoreCase(cachedDefaultName)) {
+            return null;
+        }
+        return getExtension(cachedDefaultName);
+    }
+
+    /**
+     * 获取扩展点的实现类
+     *
+     * @return
+     */
+    private Map<String, Class<?>> getExtensionClasses() {
+        Map<String, Class<?>> classes = cachedClasses.get();
+        if (classes == null) {
+            synchronized (cachedClasses) {
+                classes = cachedClasses.get();
+                if (classes == null) {
+                    classes = loadExtensionClasses();
+                    cachedClasses.set(classes);
+                }
+            }
+        }
+        return classes;
     }
 
     private Map<String, Class<?>> loadExtensionClasses() {
@@ -488,8 +550,11 @@ public class ExtensionLoader<T> {
         // 获取扩展点的配置信息
         Map<String, Class<?>> extensionClasses = new HashMap<>();
         // DUBBO INTER DIRECTORY
+        loadFile(extensionClasses, DUBBO_INTERNAL_DIRECTORY);
         // DUBBO DIRECTORY
+        loadFile(extensionClasses, DUBBO_DIRECTORY);
         // SERVICES DIRECTORY
+        loadFile(extensionClasses, SERVICES_DIRECTORY);
         return extensionClasses;
     }
 
@@ -505,7 +570,7 @@ public class ExtensionLoader<T> {
      * @param dir
      */
     private void loadFile(Map<String, Class<?>> extensionClass, String dir) {
-        // 不论在什么目录下，都是扩展点类的全路径名
+        // 不论在什么目录下，都是扩展点类的全限定名作为文件名
         String fileName = dir + type.getName();
         try {
             // 因为服务的实现可能存在多个版本，即存在多个扩展点的实现
@@ -626,6 +691,31 @@ public class ExtensionLoader<T> {
             logger.error("Exception when load extension class(interface: " +
                     type + ", description file: " + fileName + ").", t);
         }
+    }
+
+    private IllegalStateException findException(String name) {
+        for (Map.Entry<String, IllegalStateException> entry : exceptions.entrySet()) {
+            if (entry.getKey().toLowerCase().contains(name.toLowerCase())) {
+                return entry.getValue();
+            }
+        }
+        StringBuilder buf = new StringBuilder("No such extension " + type.getName() + " by name " + name);
+
+
+        int i = 1;
+        for (Map.Entry<String, IllegalStateException> entry : exceptions.entrySet()) {
+            if (i == 1) {
+                buf.append(", possible causes: ");
+            }
+
+            buf.append("\r\n(");
+            buf.append(i++);
+            buf.append(") ");
+            buf.append(entry.getKey());
+            buf.append(":\r\n");
+//            buf.append(StringUtils.toString(entry.getValue()));
+        }
+        return new IllegalStateException(buf.toString());
     }
 
     private String finaAnnotationName(Class<?> clazz) {
