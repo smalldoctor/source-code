@@ -1,8 +1,8 @@
-package com.alibaba.dubbo.common;
+package com.alibaba.dubbo.common.extensionloader;
 
-import com.alibaba.dubbo.common.adaptive.HasAdaptiveExt;
-import com.alibaba.dubbo.common.extension.ExtensionFactory;
+import com.alibaba.dubbo.common.extension.Activate;
 import com.alibaba.dubbo.common.extension.ExtensionLoader;
+import com.alibaba.dubbo.common.extensionloader.activate.ActivateExt1;
 import org.junit.Test;
 
 import static org.hamcrest.CoreMatchers.allOf;
@@ -49,8 +49,18 @@ public class ExtensionLoaderTest {
     @Test
     public void test_createAdaptiveExtensionClassCode() {
         try {
-            ExtensionLoader<HasAdaptiveExt> loader = ExtensionLoader.getExtensionLoader(HasAdaptiveExt.class);
+            ExtensionLoader<Activate> loader = ExtensionLoader.getExtensionLoader(Activate.class);
             loader.createAdaptiveExtensionClassCode();
+        } catch (IllegalStateException t) {
+            System.out.println(t.getMessage());
+        }
+    }
+
+    @Test
+    public void test_getExtension_MultiName() {
+        try {
+            ExtensionLoader<ActivateExt1> loader = ExtensionLoader.getExtensionLoader(ActivateExt1.class);
+            loader.getDefaultExtension();
         } catch (IllegalStateException t) {
             System.out.println(t.getMessage());
         }
