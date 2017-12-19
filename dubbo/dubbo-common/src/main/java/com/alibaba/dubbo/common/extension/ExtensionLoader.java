@@ -5,6 +5,7 @@ import com.alibaba.dubbo.common.logger.Logger;
 import com.alibaba.dubbo.common.logger.LoggerFactory;
 import com.alibaba.dubbo.common.utils.ConcurrentHashSet;
 import com.alibaba.dubbo.common.utils.Holder;
+import com.alibaba.dubbo.common.utils.StringUtils;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -499,7 +500,56 @@ public class ExtensionLoader<T> {
 
     public T createExtension(String name) {
         Class<?> clazz = getExtensionClasses().get(name);
+        if (clazz == null)
+            throw findException(name);
+        try {
+            T instance = (T) EXTENSION_INSTANCES.get(clazz);
+            if (instance == null) {
+                EXTENSION_INSTANCES.putIfAbsent(clazz, (T) clazz.newInstance());
+                instance = (T) EXTENSION_INSTANCES.get(clazz);
+            }
+            // 进行依赖注入
+        } catch (Throwable t) {
+            throw new IllegalStateException("Extension instance(name: " + name + ", class: " +
+                    type + ") could not be instantiated: " + t.getMessage(), t);
+        }
         return null;
+    }
+
+    /**
+     * 通过ObjectFactory进行依赖注入;
+     * 要求：
+     * 1. 存在set开头的共有方法
+     * 2. set方法只有一个参数
+     *
+     * @param instance
+     * @return
+     */
+    private T injectExtension(T instance) {
+        try {
+            if (objectFactory != null) {
+                for (Method method : instance.getClass().getMethods()) {
+                    if (method.getName().startsWith("set")
+                            && method.getParameterTypes().length == 1
+                            && Modifier.isPublic(method.getModifiers())) {
+                        Class<?> pt = method.getParameterTypes()[0];
+                        try {
+                            String property = method.getName().length() > 3 ? method.getName().substring(3, 4).toLowerCase() + method.getName().substring(4) : "";
+                            Object object = objectFactory.getExtension(pt, property);
+                            if (object != null) {
+                                method.invoke(instance, object);
+                            }
+                        } catch (Exception e) {
+                            logger.error("fail to inject via method " + method.getName()
+                                    + " of interface " + type.getName() + ": " + e.getMessage(), e);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+        }
+        return instance;
     }
 
     public T getDefaultExtension() {
@@ -713,7 +763,7 @@ public class ExtensionLoader<T> {
             buf.append(") ");
             buf.append(entry.getKey());
             buf.append(":\r\n");
-//            buf.append(StringUtils.toString(entry.getValue()));
+            buf.append(StringUtils.toString(entry.getValue()));
         }
         return new IllegalStateException(buf.toString());
     }

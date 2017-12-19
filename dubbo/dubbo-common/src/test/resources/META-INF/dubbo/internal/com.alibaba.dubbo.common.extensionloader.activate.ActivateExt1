@@ -1,0 +1,5 @@
+group=com.alibaba.dubbo.common.extensionloader.activate.impl.GroupActivateExtImpl
+value=com.alibaba.dubbo.common.extensionloader.activate.impl.ValueActivateExtImpl
+order1=com.alibaba.dubbo.common.extensionloader.activate.impl.OrderActivateExtImpl1
+order2=com.alibaba.dubbo.common.extensionloader.activate.impl.OrderActivateExtImpl2
+name1,name2,name3=com.alibaba.dubbo.common.extensionloader.activate.impl.MultiNameActivateExtImp
