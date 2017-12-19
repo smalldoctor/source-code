@@ -68,6 +68,11 @@ public class ExtensionLoader<T> {
      */
     private final ExtensionFactory objectFactory;
 
+    /*
+     * 包装器，用于实现AOP;
+     * extension1 实现类： imp1 ，wrap1，wrap2
+     * imp1 -> new wrap1(imp1) -> new wrap2(new wrap1(imp1))
+     * */
     private Set<Class<?>> cachedWrapperClasses;
 
     /**
@@ -490,6 +495,7 @@ public class ExtensionLoader<T> {
                 instance = holder.get();
                 if (instance == null) {
                     // 创建instance
+                    instance = createExtension(name);
                     holder.set(instance);
                 }
             }
@@ -509,6 +515,15 @@ public class ExtensionLoader<T> {
                 instance = (T) EXTENSION_INSTANCES.get(clazz);
             }
             // 进行依赖注入
+            injectExtension(instance);
+            // 包装器，即AOP的实现
+            Set<Class<?>> wrapperClasses = cachedWrapperClasses;
+            if (wrapperClasses != null && wrapperClasses.size() > 0) {
+                for (Class<?> wrapperClass : wrapperClasses) {
+                    // 包装器类也是extension的扩展实现类；也进行依赖注入
+                    instance = injectExtension((T) wrapperClass.getConstructor(type).newInstance(instance));
+                }
+            }
         } catch (Throwable t) {
             throw new IllegalStateException("Extension instance(name: " + name + ", class: " +
                     type + ") could not be instantiated: " + t.getMessage(), t);
