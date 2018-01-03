@@ -170,6 +170,46 @@ public class ExtensionLoader<T> {
     //-------------------------------------------------  Instance Variables
 
     /**
+     * 注册新的Extension
+     *
+     * @param name
+     * @param clazz
+     * @throws IllegalStateException
+     */
+    public void addExtension(String name, Class<?> clazz) {
+        getExtensionClasses();// 检查是否已经解析加载扩展实现；如果没有则触发加载;
+
+        if (!type.isAssignableFrom(clazz)) {
+            throw new IllegalStateException("Input type " +
+                    clazz + "not implement Extension " + type);
+        }
+
+        if (clazz.isInterface()) {
+            throw new IllegalStateException("Input type " +
+                    clazz + "can not be interface!");
+        }
+
+        if (!clazz.isAnnotationPresent(Adaptive.class)) {
+            if (StringUtils.isBlank(name)) {
+                throw new IllegalStateException("Extension name is blank (Extension " + type + ")!");
+            }
+
+            if (cachedClasses.get().containsKey(name)) {
+                throw new IllegalStateException("Extension name " + name + " already existed (Extension " + type + ")!");
+            }
+
+            cachedNames.put(clazz, name);
+            cachedClasses.get().put(name, clazz);
+        } else {
+            if (cachedAdaptiveClass != null) {
+                throw new IllegalStateException("Adaptive Extension already existed(Extension " + type + ")!");
+            }
+
+            cachedAdaptiveClass = clazz;
+        }
+    }
+
+    /**
      * 每个扩展点都有自己的ExtensionLoader，通过ExtensionLoader获取
      * AdaptiveExtension；AdaptiveExtension自适应的扩展点适配器，从而从多个扩展点的实现中自动
      * 匹配准确的Extension;
@@ -187,7 +227,7 @@ public class ExtensionLoader<T> {
                     instance = cachedAdaptiveInstance.get();
                     if (instance == null) {
                         try {
-                            // TODO 创建 Adaptive
+                            instance = createAdaptiveExtension();
                             cachedAdaptiveInstance.set(instance);
                         } catch (Throwable t) {
                             createAdaptiveInstanceError = t;
@@ -200,6 +240,29 @@ public class ExtensionLoader<T> {
             }
         }
         return null;
+    }
+
+    private T createAdaptiveExtension() {
+        try {
+            return injectExtension((T) getAdaptiveExtensionClass().newInstance());
+        } catch (Exception e) {
+            throw new IllegalStateException("Can not create adaptive extension " + type + ", cause: " + e.getMessage(), e);
+        }
+    }
+
+    private Class<?> getAdaptiveExtensionClass() {
+        getExtensionClasses();
+        if (cachedAdaptiveClass != null)
+            return cachedAdaptiveClass;
+        return cachedAdaptiveClass = createAdaptiveExtensionClass();
+    }
+
+    private Class<?> createAdaptiveExtensionClass() {
+        String code = createAdaptiveExtensionClassCode();
+        ClassLoader classLoader = findClassLoader();
+        Class<?> adaptiveClass =
+                ExtensionLoader.getExtensionLoader(com.alibaba.dubbo.common.compiler.Compiler.class).getAdaptiveExtension().compile(code, classLoader);
+        return adaptiveClass;
     }
 
     /**
@@ -524,11 +587,11 @@ public class ExtensionLoader<T> {
                     instance = injectExtension((T) wrapperClass.getConstructor(type).newInstance(instance));
                 }
             }
+            return instance;
         } catch (Throwable t) {
             throw new IllegalStateException("Extension instance(name: " + name + ", class: " +
                     type + ") could not be instantiated: " + t.getMessage(), t);
         }
-        return null;
     }
 
     /**
@@ -577,7 +640,8 @@ public class ExtensionLoader<T> {
     }
 
     /**
-     * 获取扩展点的实现类
+     * 获取扩展点的实现类;
+     * 触发Extension配置文件的读取解析，生成Active，Adaptive等扩展点的缓存
      *
      * @return
      */
@@ -700,7 +764,7 @@ public class ExtensionLoader<T> {
                                                     // Extension的实现;必须存在无参构造器
                                                     clazz.getConstructor();
                                                     if (name == null || name.length() == 0) {
-                                                        name = finaAnnotationName(clazz);
+                                                        name = findAnnotationName(clazz);
                                                         // 如果使用了老的Extension注解，但是没有配置默认值,则还有可能是null
                                                         if (name == null || name.length() == 0) {
                                                             if (clazz.getSimpleName().length() > type.getSimpleName().length()
@@ -758,6 +822,26 @@ public class ExtensionLoader<T> {
         }
     }
 
+    /**
+     * 是否存在匹配的group；
+     * 如果Activate注解的groups为空，则对所有group生效，否则只对配置的生效；
+     *
+     * @param group
+     * @param groups
+     * @return
+     */
+    private boolean isMatchGroup(String group, String[] groups) {
+        if (groups == null || groups.length == 0)
+            return true;
+        if (groups != null && groups.length > 0) {
+            for (String g : groups) {
+                if (g.equals(group))
+                    return true;
+            }
+        }
+        return false;
+    }
+
     private IllegalStateException findException(String name) {
         for (Map.Entry<String, IllegalStateException> entry : exceptions.entrySet()) {
             if (entry.getKey().toLowerCase().contains(name.toLowerCase())) {
@@ -783,7 +867,7 @@ public class ExtensionLoader<T> {
         return new IllegalStateException(buf.toString());
     }
 
-    private String finaAnnotationName(Class<?> clazz) {
+    private String findAnnotationName(Class<?> clazz) {
         Extension extension = clazz.getAnnotation(Extension.class);
         if (extension == null) {
             String name = clazz.getSimpleName();
