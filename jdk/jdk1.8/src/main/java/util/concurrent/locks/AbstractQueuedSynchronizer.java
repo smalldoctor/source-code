@@ -1646,7 +1646,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
 
         /**
          * nextWaiter用于两个场景：
-         * 在CHL队列实现中：
+         * 在CHL队列实现中（非condition的队列时）：
          * 1. nextWaiter用来判断是否共享模式；通过值比较即地址比较的方式快速判断；
          *
          * 在Condition的队列中：
