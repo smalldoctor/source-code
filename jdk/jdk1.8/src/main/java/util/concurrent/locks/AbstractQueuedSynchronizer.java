@@ -428,7 +428,8 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
      * 等待队列的头,懒初始化(队列新建时是null)。除了初始化,只能使用setHead方法进行修改。
      * 如果是队列的头,需要保证它的waitState不能是Cancelled。
      * <p>
-     * head表示已经出队的线程
+     * head表示已经出队的线程,在锁的场景下，则是已经持有锁的线程；
+     * 通常所说的阻塞队列，是由Node组成的链表，但是不包括head在内；
      * <p>
      * volatile 多线程
      */
@@ -440,7 +441,8 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
     private transient volatile Node tail;
 
     /**
-     * Synchronizer的state
+     * Synchronizer的state;
+     * 在锁实现的场景中，如果等于0，则代表没有持有锁；大于0则代表有线程持有锁；
      * <p>
      * volatile 多线程
      */
@@ -1609,7 +1611,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         //waitStatus
 
         /**
-         * 代表线程被Canceled。node因为超时或者中断被cancelled。
+         * 代表线程等待被Canceled。node因为超时或者中断被cancelled。
          */
         static final int CANCELLED = 1;
 
@@ -1643,8 +1645,10 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         volatile int waitStatus;
 
         /**
+         * nextWaiter用于两个场景：
          * 在CHL队列实现中：
          * 1. nextWaiter用来判断是否共享模式；通过值比较即地址比较的方式快速判断；
+         *
          * 在Condition的队列中：
          * 1. 用来指向下个节点,实现链表，从而实现队列
          */
