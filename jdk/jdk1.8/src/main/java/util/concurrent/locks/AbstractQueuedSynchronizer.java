@@ -63,16 +63,14 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
      * 实现Lock的lock方法。独占模式。
      * 至少调用tryAcquire一次，如果tryAcquire返回失败，则线程将被放入队列；
      * <p>
-     * 互斥获取是不响应中断，即不会抛出中断异常；但是会设置线程的中断状态；
+     * 互斥获取不响应中断，即不会抛出中断异常；但是会设置线程的中断状态；
      */
     public final void acquire(int arg) {
         // 调用一次tryAcquire，如果失败则放入queue
         // 如果获取失败，则进入阻塞队列阻塞线程;线程会有可能被反复的唤醒或者阻塞，直到tryAcquire成功;
         if (!tryAcquire(arg)
                 && acquireQueued(addWaiter(Node.EXCLUSIVE), arg)) {
-            // 因为在第一次获取tryAcquire失败之后，线程则进入阻塞队列，从阻塞队列成功返回（true）之后，说明
-            // 是被中断唤醒之后成功获取锁,重置线程的中断状态;如果从碰巧入队之后，立刻成功获取到锁，则返回false，则
-            // 是非中断唤醒；
+            // 因为park之后，有可能是unpark也有可能是中断导致返回，需要自己判断返回类型；
             selfInterrupt();
         }
     }
@@ -509,7 +507,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
      * @return
      */
     private final boolean compareAndSetTail(Node expect, Node update) {
-        return unsafe.compareAndSwapObject(this, tailOffset, expect, update);
+            return unsafe.compareAndSwapObject(this, tailOffset, expect, update);
     }
 
     //队列相关
@@ -623,8 +621,8 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         /**
          * 因为在addWaiter的enq时，CAS tail和t.next = node不是一个原子操作，
          * 则有可能一个线程在addWaiter入列，另一个在unparkSuccessor,因此此时如果从head往后找，
-         * 则有可能找不到next；但是因为node.prev = t操作是在CAS之前，如果CAS tail失败则入列失败，
-         * 则还不在队列中。所以从tail开始往前遍历到当前node，是可以找到successor的。
+         * 则有可能找不到next；但是因为node.prev = t操作是在CAS之前，只要CAS成功了，prev一定是
+         * 被设置成功了；
          */
 
         Node s = node.next;
@@ -1648,7 +1646,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
          * nextWaiter用于两个场景：
          * 在CHL队列实现中（非condition的队列时）：
          * 1. nextWaiter用来判断是否共享模式；通过值比较即地址比较的方式快速判断；
-         *
+         * <p>
          * 在Condition的队列中：
          * 1. 用来指向下个节点,实现链表，从而实现队列
          */
