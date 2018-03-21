@@ -842,18 +842,22 @@ public class Thread implements Runnable {
      * #join(long, int)}, {@link #sleep(long)}, or {@link #sleep(long, int)},
      * methods of this class, then its interrupt status will be cleared and it
      * will receive an {@link InterruptedException}.
+     * 如果是因为调用Object和Thread的相关线程的操作阻塞的，则清楚线程的中断状态并抛出
+     * {@link InterruptedException}
      * <p>
      * <p> If this thread is blocked in an I/O operation upon an {@link
      * java.nio.channels.InterruptibleChannel InterruptibleChannel}
      * then the channel will be closed, the thread's interrupt
      * status will be set, and the thread will receive a {@link
      * java.nio.channels.ClosedByInterruptException}.
+     * 如果是I/O操作阻塞，则设置中断状态并且抛出 {@link java.nio.channels.ClosedByInterruptException}
      * <p>
      * <p> If this thread is blocked in a {@link java.nio.channels.Selector}
      * then the thread's interrupt status will be set and it will return
      * immediately from the selection operation, possibly with a non-zero
      * value, just as if the selector's {@link
      * java.nio.channels.Selector#wakeup wakeup} method were invoked.
+     * 如果是Selector阻塞，则设置中断状态并且立即返回，但是可能返回是O值
      * <p>
      * <p> If none of the previous conditions hold then this thread's interrupt
      * status will be set. </p>
