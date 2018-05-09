@@ -83,7 +83,7 @@ import sun.security.util.SecurityConstants;
  *         PrimeThread(long minPrime) {
  *             this.minPrime = minPrime;
  *         }
- * <p>
+ *
  *         public void run() {
  *             // compute primes larger than minPrime
  *             &nbsp;.&nbsp;.&nbsp;.
@@ -109,7 +109,7 @@ import sun.security.util.SecurityConstants;
  *         PrimeRun(long minPrime) {
  *             this.minPrime = minPrime;
  *         }
- * <p>
+ *
  *         public void run() {
  *             // compute primes larger than minPrime
  *             &nbsp;.&nbsp;.&nbsp;.
@@ -179,7 +179,10 @@ public class Thread implements Runnable {
         return threadInitNumber++;
     }
 
-    /* 用来存放ThreadLocals局部变量*/
+    /**
+     * 用来存放ThreadLocals局部变量;
+     * 在第一次调用ThreadLocal的set或者get方法时才会初始化;
+     */
     ThreadLocal.ThreadLocalMap threadLocals = null;
 
     /*
@@ -268,12 +271,12 @@ public class Thread implements Runnable {
      * A hint to the scheduler that the current thread is willing to yield
      * its current use of a processor. The scheduler is free to ignore this
      * hint.
-     * <p>
+     *
      * <p> Yield is a heuristic attempt to improve relative progression
      * between threads that would otherwise over-utilise a CPU. Its use
      * should be combined with detailed profiling and benchmarking to
      * ensure that it actually has the desired effect.
-     * <p>
+     *
      * <p> It is rarely appropriate to use this method. It may be useful
      * for debugging or testing purposes, where it may help to reproduce
      * bugs due to race conditions. It may also be useful when designing
@@ -529,22 +532,22 @@ public class Thread implements Runnable {
      * Allocates a new {@code Thread} object so that it has {@code target}
      * as its run object, has the specified {@code name} as its name,
      * and belongs to the thread group referred to by {@code group}.
-     * <p>
+     *
      * <p>If there is a security manager, its
      * {@link SecurityManager#checkAccess(ThreadGroup) checkAccess}
      * method is invoked with the ThreadGroup as its argument.
-     * <p>
+     *
      * <p>In addition, its {@code checkPermission} method is invoked with
      * the {@code RuntimePermission("enableContextClassLoaderOverride")}
      * permission when invoked directly or indirectly by the constructor
      * of a subclass which overrides the {@code getContextClassLoader}
      * or {@code setContextClassLoader} methods.
-     * <p>
+     *
      * <p>The priority of the newly created thread is set equal to the
      * priority of the thread creating it, that is, the currently running
      * thread. The method {@linkplain #setPriority setPriority} may be
      * used to change the priority to a new value.
-     * <p>
+     *
      * <p>The newly created thread is initially marked as being a daemon
      * thread if and only if the thread creating it is currently marked
      * as a daemon thread. The method {@linkplain #setDaemon setDaemon}
@@ -571,14 +574,14 @@ public class Thread implements Runnable {
      * as its run object, has the specified {@code name} as its name,
      * and belongs to the thread group referred to by {@code group}, and has
      * the specified <i>stack size</i>.
-     * <p>
+     *
      * <p>This constructor is identical to {@link
      * #Thread(ThreadGroup, Runnable, String)} with the exception of the fact
      * that it allows the thread stack size to be specified.  The stack size
      * is the approximate number of bytes of address space that the virtual
      * machine is to allocate for this thread's stack.  <b>The effect of the
      * {@code stackSize} parameter, if any, is highly platform dependent.</b>
-     * <p>
+     *
      * <p>On some platforms, specifying a higher value for the
      * {@code stackSize} parameter may allow a thread to achieve greater
      * recursion depth before throwing a {@link StackOverflowError}.
@@ -589,7 +592,7 @@ public class Thread implements Runnable {
      * and the maximum recursion depth and concurrency level are
      * platform-dependent.  <b>On some platforms, the value of the
      * {@code stackSize} parameter may have no effect whatsoever.</b>
-     * <p>
+     *
      * <p>The virtual machine is free to treat the {@code stackSize}
      * parameter as a suggestion.  If the specified value is unreasonably low
      * for the platform, the virtual machine may instead use some
@@ -597,11 +600,11 @@ public class Thread implements Runnable {
      * high, the virtual machine may instead use some platform-specific
      * maximum.  Likewise, the virtual machine is free to round the specified
      * value up or down as it sees fit (or to ignore it completely).
-     * <p>
+     *
      * <p>Specifying a value of zero for the {@code stackSize} parameter will
      * cause this constructor to behave exactly like the
      * {@code Thread(ThreadGroup, Runnable, String)} constructor.
-     * <p>
+     *
      * <p><i>Due to the platform-dependent nature of the behavior of this
      * constructor, extreme care should be exercised in its use.
      * The thread stack size necessary to perform a given computation will
@@ -609,7 +612,7 @@ public class Thread implements Runnable {
      * variation, careful tuning of the stack size parameter may be required,
      * and the tuning may need to be repeated for each JRE implementation on
      * which an application is to run.</i>
-     * <p>
+     *
      * <p>Implementation note: Java platform implementers are encouraged to
      * document their implementation's behavior with respect to the
      * {@code stackSize} parameter.
@@ -842,7 +845,7 @@ public class Thread implements Runnable {
      * #join(long, int)}, {@link #sleep(long)}, or {@link #sleep(long, int)},
      * methods of this class, then its interrupt status will be cleared and it
      * will receive an {@link InterruptedException}.
-     * 如果是因为调用Object和Thread的相关线程的操作阻塞的，则清楚线程的中断状态并抛出
+     * 如果是因为调用Object和Thread的相关线程的操作阻塞的，则清除线程的中断状态并抛出
      * {@link InterruptedException}
      * <p>
      * <p> If this thread is blocked in an I/O operation upon an {@link
@@ -861,7 +864,7 @@ public class Thread implements Runnable {
      * <p>
      * <p> If none of the previous conditions hold then this thread's interrupt
      * status will be set. </p>
-     * <p>
+     *
      * <p> Interrupting a thread that is not alive need not have any effect.
      *
      * @throws SecurityException if the current thread cannot modify this thread
@@ -890,7 +893,7 @@ public class Thread implements Runnable {
      * second call would return false (unless the current thread were
      * interrupted again, after the first call had cleared its interrupted
      * status and before the second call had examined it).
-     * <p>
+     *
      * <p>A thread interruption ignored because a thread was not alive
      * at the time of the interrupt will be reflected by this method
      * returning false.
@@ -907,7 +910,7 @@ public class Thread implements Runnable {
     /**
      * Tests whether this thread has been interrupted.  The <i>interrupted
      * status</i> of the thread is unaffected by this method.
-     * <p>
+     *
      * <p>A thread interruption ignored because a thread was not alive
      * at the time of the interrupt will be reflected by this method
      * returning false.
@@ -1115,7 +1118,7 @@ public class Thread implements Runnable {
      * thread's {@linkplain java.lang.ThreadGroup thread group} and its
      * subgroups. Recursively iterates over all subgroups in the current
      * thread's thread group.
-     * <p>
+     *
      * <p> The value returned is only an estimate because the number of
      * threads may change dynamically while this method traverses internal
      * data structures, and might be affected by the presence of certain
@@ -1135,7 +1138,7 @@ public class Thread implements Runnable {
      * thread's thread group and its subgroups. This method simply
      * invokes the {@link java.lang.ThreadGroup#enumerate(Thread[])}
      * method of the current thread's thread group.
-     * <p>
+     *
      * <p> An application might use the {@linkplain #activeCount activeCount}
      * method to get an estimate of how big the array should be, however
      * <i>if the array is too short to hold all the threads, the extra threads
@@ -1143,7 +1146,7 @@ public class Thread implements Runnable {
      * thread in the current thread's thread group and its subgroups, the
      * invoker should verify that the returned int value is strictly less
      * than the length of {@code tarray}.
-     * <p>
+     *
      * <p> Due to the inherent race condition in this method, it is recommended
      * that the method only be used for debugging and monitoring purposes.
      *
@@ -1173,7 +1176,7 @@ public class Thread implements Runnable {
     /**
      * Waits at most {@code millis} milliseconds for this thread to
      * die. A timeout of {@code 0} means to wait forever.
-     * <p>
+     *
      * <p> This implementation uses a loop of {@code this.wait} calls
      * conditioned on {@code this.isAlive}. As a thread terminates the
      * {@code this.notifyAll} method is invoked. It is recommended that
@@ -1214,7 +1217,7 @@ public class Thread implements Runnable {
     /**
      * Waits at most {@code millis} milliseconds plus
      * {@code nanos} nanoseconds for this thread to die.
-     * <p>
+     *
      * <p> This implementation uses a loop of {@code this.wait} calls
      * conditioned on {@code this.isAlive}. As a thread terminates the
      * {@code this.notifyAll} method is invoked. It is recommended that
@@ -1250,10 +1253,10 @@ public class Thread implements Runnable {
 
     /**
      * Waits for this thread to die.
-     * <p>
+     *
      * <p> An invocation of this method behaves in exactly the same
      * way as the invocation
-     * <p>
+     *
      * <blockquote>
      * {@linkplain #join(long) join}{@code (0)}
      * </blockquote>
@@ -1280,7 +1283,7 @@ public class Thread implements Runnable {
      * Marks this thread as either a {@linkplain #isDaemon daemon} thread
      * or a user thread. The Java Virtual Machine exits when the only
      * threads running are all daemon threads.
-     * <p>
+     *
      * <p> This method must be invoked before the thread is started.
      *
      * @param on if {@code true}, marks this thread as a daemon thread
@@ -1351,7 +1354,7 @@ public class Thread implements Runnable {
      * ClassLoader context of the parent Thread. The context ClassLoader of the
      * primordial thread is typically set to the class loader used to load the
      * application.
-     * <p>
+     *
      * <p>If a security manager is present, and the invoker's class loader is not
      * {@code null} and is not the same as or an ancestor of the context class
      * loader, then this method invokes the security manager's {@link
@@ -1384,7 +1387,7 @@ public class Thread implements Runnable {
      * the creator of the thread to provide the appropriate class loader,
      * through {@code getContextClassLoader}, to code running in the thread
      * when loading classes and resources.
-     * <p>
+     *
      * <p>If a security manager is present, its {@link
      * SecurityManager#checkPermission(java.security.Permission) checkPermission}
      * method is invoked with a {@link RuntimePermission RuntimePermission}{@code
@@ -1407,7 +1410,7 @@ public class Thread implements Runnable {
     /**
      * Returns <tt>true</tt> if and only if the current thread holds the
      * monitor lock on the specified object.
-     * <p>
+     *
      * <p>This method is designed to allow a program to assert that
      * the current thread already holds a specified lock:
      * <pre>
@@ -1435,13 +1438,13 @@ public class Thread implements Runnable {
      * method invocation in the sequence.  The last element of the array
      * represents the bottom of the stack, which is the least recent method
      * invocation in the sequence.
-     * <p>
+     *
      * <p>If there is a security manager, and this thread is not
      * the current thread, then the security manager's
      * <tt>checkPermission</tt> method is called with a
      * <tt>RuntimePermission("getStackTrace")</tt> permission
      * to see if it's ok to get the stack trace.
-     * <p>
+     *
      * <p>Some virtual machines may, under some circumstances, omit one
      * or more stack frames from the stack trace.  In the extreme case,
      * a virtual machine that has no stack trace information concerning
@@ -1492,13 +1495,13 @@ public class Thread implements Runnable {
      * of the corresponding <tt>Thread</tt>.
      * The returned stack traces are in the format specified for
      * the {@link #getStackTrace getStackTrace} method.
-     * <p>
+     *
      * <p>The threads may be executing while this method is called.
      * The stack trace of each thread only represents a snapshot and
      * each stack trace may be obtained at different time.  A zero-length
      * array will be returned in the map value if the virtual machine has
      * no stack trace information about a thread.
-     * <p>
+     *
      * <p>If there is a security manager, then the security manager's
      * <tt>checkPermission</tt> method is called with a
      * <tt>RuntimePermission("getStackTrace")</tt> permission as well as
@@ -1699,7 +1702,7 @@ public class Thread implements Runnable {
          * <li>{@link #join() Thread.join} with no timeout</li>
          * <li>{@link LockSupport#park() LockSupport.park}</li>
          * </ul>
-         * <p>
+         *
          * <p>A thread in the waiting state is waiting for another thread to
          * perform a particular action.
          * <p>
@@ -1793,7 +1796,7 @@ public class Thread implements Runnable {
      * Set the default handler invoked when a thread abruptly terminates
      * due to an uncaught exception, and no other handler has been defined
      * for that thread.
-     * <p>
+     *
      * <p>Uncaught exception handling is controlled first by the thread, then
      * by the thread's {@link ThreadGroup} object and finally by the default
      * uncaught exception handler. If the thread does not have an explicit
@@ -1806,7 +1809,7 @@ public class Thread implements Runnable {
      * logging to a specific device, or file) for those threads that would
      * already accept whatever &quot;default&quot; behavior the system
      * provided.
-     * <p>
+     *
      * <p>Note that the default uncaught exception handler should not usually
      * defer to the thread's <tt>ThreadGroup</tt> object, as that could cause
      * infinite recursion.
