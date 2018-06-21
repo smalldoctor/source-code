@@ -15,7 +15,7 @@
     </annotationProcessing>
     <bytecodeTargetLevel>
       <module name="buffer" target="1.5" />
-      <module name="common" target="1.7" />
+      <module name="common" target="1.8" />
       <module name="netty-4.x" target="1.5" />
       <module name="netty-buffer" target="1.5" />
       <module name="netty-common" target="1.5" />

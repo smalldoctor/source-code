@@ -31,4 +31,11 @@ public final class StringUtils {
             p.close();
         }
     }
+
+    public static boolean isBlank(String str) {
+        if (str == null || str.length() == 0) {
+            return true;
+        }
+        return false;
+    }
 }
