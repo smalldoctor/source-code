@@ -1,4 +1,4 @@
-package jdk8inaction.chap4;
+package jdk8features.test4;
 
 import java.util.ArrayList;
 import java.util.Comparator;

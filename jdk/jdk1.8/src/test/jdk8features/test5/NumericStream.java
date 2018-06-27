@@ -1,6 +1,6 @@
-package jdk8inaction.chap5;
+package jdk8features.test5;
 
-import jdk8inaction.chap4.Dish;
+import jdk8features.test4.Dish;
 
 import java.util.Arrays;
 import java.util.List;
