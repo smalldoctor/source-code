@@ -1,0 +1,3 @@
+Manifest-Version: 1.0
+Agent-Class: instrumentation.agentmain.loaded.LoadedAgent
+Created-By: 1.6.0_29
