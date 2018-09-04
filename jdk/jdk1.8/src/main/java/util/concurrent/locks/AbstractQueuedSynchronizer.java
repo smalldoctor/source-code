@@ -429,6 +429,8 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
      * head表示已经出队的线程,在锁的场景下，则是已经持有锁的线程；
      * 通常所说的阻塞队列，是由Node组成的链表，但是不包括head在内；
      * <p>
+     * head是同步状态持有者，所以还存在释放的过程，即head释放同步状态；
+     * <p>
      * volatile 多线程
      */
     private transient volatile Node head;
@@ -507,7 +509,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
      * @return
      */
     private final boolean compareAndSetTail(Node expect, Node update) {
-            return unsafe.compareAndSwapObject(this, tailOffset, expect, update);
+        return unsafe.compareAndSwapObject(this, tailOffset, expect, update);
     }
 
     //队列相关
@@ -1595,6 +1597,9 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
      * 1. 入队只需加入队尾设置tail，出队则设置head
      * 2. 需要处理后继节点的问题，因为后继节点存在被取消或者超时的情况
      * 3. 如果一个节点被Cancel，则需要将后继节点link到一个非空的前继节点
+     * <p>
+     * 共享式与独占式的最主要区别在于同一时刻独占式只能有一个线程获取同步状态，而共享式在同一时刻可以有多个
+     * 线程获取同步状态。例如读操作可以有多个线程同时进行，而写操作同一时刻只能有一个线程进行写操作，其他操作都会被阻塞。
      */
     static final class Node {
         /**
@@ -1615,7 +1620,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
 
         /**
          * 代表继任者(接替线程,后继线程)线程需要唤醒；
-         * 下个等待节点所对应的线程park，需要unpark
+         * 当前节点释放或者取消时，需要通知后继节点；
          */
         static final int SIGNAL = -1;
 
@@ -1625,7 +1630,8 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         static final int CONDITION = -2;
 
         /**
-         * 代表后续节点会传播唤醒动作，共享模式起作用
+         * 代表后续节点会传播唤醒动作，共享模式起作用；
+         * 这个状态只在的doReleaseShared中对head节点设置；
          */
         static final int PROPAGATE = -3;
 
