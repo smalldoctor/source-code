@@ -19,12 +19,11 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * 各种同步机制的抽象,如信号量,闭锁,周期障碍,锁,在多线程场景下,以共享状态实现同步,
- * 在符合某个条件时做什么事情
+ * 在符合某个条件时做什么事情;
  * <p>
  * 提供一个框架用于实现blocking lock和相关的基于先进先出的队列Synchronizer。
  * AbstractQueuedSynchronizer被用于以atomic int做为状态的同步器的基础。
- * 使用受保护的方法改变state,并且需要定义好什么状态代表获取,什么状态代表释放。
- * 使用getState,setState,compareAndSetState来使用state。
+ * 使用受保护的方法改变state,使用getState,setState,compareAndSetState来使用state。
  * <p>
  * AQS对状态的维护是由子类实现，本身主要完成线程阻塞队列的维护和线程的阻塞及唤醒工作；
  * AQS提供了模版方法acquire和release方法；但是具体的实现由子类实现：
@@ -33,7 +32,7 @@ import java.util.concurrent.TimeUnit;
  * AQS及基于AQS实现的同步器多数都是用到了一个Spin Lock的机制。Spin Lock就是让线程通过
  * 不断的循环进行等待而不是睡眠。
  *
- * @see com.rmxue.concurrent.spinlock.SpinLock
+ * com.rmxue.concurrent.spinlock.SpinLock
  * // 获取锁其实就是相当于predecessor node的locked标识为false,然后current node的locked标识为true
  * // lock方法停止自旋并返回,然后当前Thread的方法继续执行lock方法调用之下的代码；如果lock方法一直自旋，
  * // 没有返回，相当于获取锁失败，阻塞执行lock方法调用之下的代码。
@@ -41,6 +40,10 @@ import java.util.concurrent.TimeUnit;
  * // 在条件满足的情况lock方法返回，继续执行lock方法调用之下代码的执行；
  * <p>
  * AQS操作的基础是CAS；
+ * AQS本质是通过对state的加减，实现线程阻塞和释放；
+ * state只是状态，用于线程进行挂起和唤醒的状态；子类在实现的时候，根据具体的场景合理使用状态进行线程的挂起和唤醒；
+ * acquire：是否需要挂起线程，进入队列等待
+ * release：是否需要唤醒队列中的线程
  * @since 1.5
  */
 public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
