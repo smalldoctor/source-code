@@ -169,14 +169,24 @@ public class CountDownLatch {
             return getState();
         }
 
+        /**
+         * 在latch场景中，如果state大于0，则需要等待；
+         * */
         protected int tryAcquireShared(int acquires) {
             return (getState() == 0) ? 1 : -1;
         }
 
+        /**
+         * 在latch场景中，如果state等于0，则进行阻塞线程的唤醒
+         * */
         protected boolean tryReleaseShared(int releases) {
             // Decrement count; signal when transition to zero
             for (;;) {
                 int c = getState();
+                /**
+                 * 如果count在变成之后0，则不会再进行线程的唤醒；
+                 * 即latch只能使用一次；
+                 * */
                 if (c == 0)
                     return false;
                 int nextc = c-1;
@@ -197,12 +207,16 @@ public class CountDownLatch {
      */
     public CountDownLatch(int count) {
         if (count < 0) throw new IllegalArgumentException("count < 0");
+        /**
+         * 借助AQS的state，实现多线程的等待与唤醒
+         * */
         this.sync = new Sync(count);
     }
 
     /**
      * Causes the current thread to wait until the latch has counted down to
      * zero, unless the thread is {@linkplain Thread#interrupt interrupted}.
+     * 当前线程会阻塞直到，latch的count变成0；
      *
      * <p>If the current count is zero then this method returns immediately.
      *
@@ -286,6 +300,8 @@ public class CountDownLatch {
      * thread scheduling purposes.
      *
      * <p>If the current count equals zero then nothing happens.
+     * 进行count的减1，如果count减1之后等于0，则进行线程唤醒；
+     * 如果count已经为0，则不进行任何操作；
      */
     public void countDown() {
         sync.releaseShared(1);

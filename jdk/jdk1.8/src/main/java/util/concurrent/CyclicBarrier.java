@@ -211,6 +211,10 @@ public class CyclicBarrier {
                 throw new InterruptedException();
             }
 
+            /**
+            * 在每次调用await方法时，进行count的减1；当数量为0时，调用Action方法；
+             * 并进行初始化下次的循环；
+            * */
             int index = --count;
             if (index == 0) {  // tripped
                 boolean ranAction = false;
