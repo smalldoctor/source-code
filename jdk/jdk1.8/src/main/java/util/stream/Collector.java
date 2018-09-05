@@ -189,25 +189,14 @@ import java.util.function.Supplier;
  * @see Collectors
  *
  * @param <T> the type of input elements to the reduction operation
- *           进行归约操作的元素类型
  * @param <A> the mutable accumulation type of the reduction operation (often
  *            hidden as an implementation detail)
- *           累加器的类型；进行归约操作的累加器的类型
  * @param <R> the result type of the reduction operation
- *           归约操作的结果集类型
- *
- *           归约是过程，收集器是结果；归约是收集器的过程，收集器是归约的结果；
  * @since 1.8
  */
 public interface Collector<T, A, R> {
-    /*
-     * 前四个方法都会返回一个会被collect方法调用的函数，
-     * 而第五个方法characteristics则提供 了一系列特征，也就是一个提示列表，
-     * 告诉collect方法在执行归约操作的时候可以应用哪些优化(比如并行化)。
-     * */
     /**
      * A function that creates and returns a new mutable result container.
-     * 授之以鱼不如授之以渔
      *
      * @return a function which returns a new, mutable result container
      */
@@ -215,7 +204,7 @@ public interface Collector<T, A, R> {
 
     /**
      * A function that folds a value into a mutable result container.
-     * 累加器的累加操作：将输入的元素合并进可变的容器
+     *
      * @return a function which folds a value into a mutable result container
      */
     BiConsumer<A, T> accumulator();
@@ -224,8 +213,7 @@ public interface Collector<T, A, R> {
      * A function that accepts two partial results and merges them.  The
      * combiner function may fold state from one argument into the other and
      * return that, or may return a new result container.
-     * BinaryOperator相当于一个操作符，由两个同类型的操作数，得出一个同类型的结果；如此处的
-     * 合并操作；
+     *
      * @return a function which combines two partial results into a combined
      * result
      */
@@ -278,9 +266,9 @@ public interface Collector<T, A, R> {
         Objects.requireNonNull(combiner);
         Objects.requireNonNull(characteristics);
         Set<Characteristics> cs = (characteristics.length == 0)
-                ? Collectors.CH_ID
-                : Collections.unmodifiableSet(EnumSet.of(Collector.Characteristics.IDENTITY_FINISH,
-                characteristics));
+                                  ? Collectors.CH_ID
+                                  : Collections.unmodifiableSet(EnumSet.of(Collector.Characteristics.IDENTITY_FINISH,
+                                                                           characteristics));
         return new Collectors.CollectorImpl<>(supplier, accumulator, combiner, cs);
     }
 

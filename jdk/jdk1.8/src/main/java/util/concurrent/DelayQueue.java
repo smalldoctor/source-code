@@ -34,9 +34,7 @@
  */
 
 package java.util.concurrent;
-
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
-
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.*;
@@ -54,10 +52,6 @@ import java.util.*;
  * treated as normal elements. For example, the {@code size} method
  * returns the count of both expired and unexpired elements.
  * This queue does not permit null elements.
- * 无界阻塞队列；元素是继承Delayed的类的实例；head元素是在过去中最新超时的元素，否则
- * head元素是null并且poll方法返回的是null；如果元素的getDelay返回小于等于0的值，则
- * 认为元素到期；非到期的元素也是正常元素，如size方法会统计到期和非到期的元素；
- * 延迟队列不允许null元素；
  *
  * <p>This class and its iterator implement all of the
  * <em>optional</em> methods of the {@link Collection} and {@link
@@ -69,12 +63,12 @@ import java.util.*;
  * <a href="{@docRoot}/../technotes/guides/collections/index.html">
  * Java Collections Framework</a>.
  *
- * @param <E> the type of elements held in this collection
- * @author Doug Lea
  * @since 1.5
+ * @author Doug Lea
+ * @param <E> the type of elements held in this collection
  */
 public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
-        implements BlockingQueue<E> {
+    implements BlockingQueue<E> {
 
     private final transient ReentrantLock lock = new ReentrantLock();
     private final PriorityQueue<E> q = new PriorityQueue<E>();
@@ -107,8 +101,7 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
     /**
      * Creates a new {@code DelayQueue} that is initially empty.
      */
-    public DelayQueue() {
-    }
+    public DelayQueue() {}
 
     /**
      * Creates a {@code DelayQueue} initially containing the elements of the
@@ -116,7 +109,7 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
      *
      * @param c the collection of elements to initially contain
      * @throws NullPointerException if the specified collection or any
-     *                              of its elements are null
+     *         of its elements are null
      */
     public DelayQueue(Collection<? extends E> c) {
         this.addAll(c);
@@ -170,9 +163,9 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
      * Inserts the specified element into this delay queue. As the queue is
      * unbounded this method will never block.
      *
-     * @param e       the element to add
+     * @param e the element to add
      * @param timeout This parameter is ignored as the method never blocks
-     * @param unit    This parameter is ignored as the method never blocks
+     * @param unit This parameter is ignored as the method never blocks
      * @return {@code true}
      * @throws NullPointerException {@inheritDoc}
      */
@@ -185,7 +178,7 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
      * if this queue has no elements with an expired delay.
      *
      * @return the head of this queue, or {@code null} if this
-     * queue has no elements with an expired delay
+     *         queue has no elements with an expired delay
      */
     public E poll() {
         final ReentrantLock lock = this.lock;
@@ -212,7 +205,7 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
         final ReentrantLock lock = this.lock;
         lock.lockInterruptibly();
         try {
-            for (; ; ) {
+            for (;;) {
                 E first = q.peek();
                 if (first == null)
                     available.await();
@@ -248,8 +241,8 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
      * or the specified wait time expires.
      *
      * @return the head of this queue, or {@code null} if the
-     * specified waiting time elapses before an element with
-     * an expired delay becomes available
+     *         specified waiting time elapses before an element with
+     *         an expired delay becomes available
      * @throws InterruptedException {@inheritDoc}
      */
     public E poll(long timeout, TimeUnit unit) throws InterruptedException {
@@ -257,7 +250,7 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
         final ReentrantLock lock = this.lock;
         lock.lockInterruptibly();
         try {
-            for (; ; ) {
+            for (;;) {
                 E first = q.peek();
                 if (first == null) {
                     if (nanos <= 0)
@@ -301,7 +294,7 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
      * if one exists.
      *
      * @return the head of this queue, or {@code null} if this
-     * queue is empty
+     *         queue is empty
      */
     public E peek() {
         final ReentrantLock lock = this.lock;
@@ -331,7 +324,7 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
         // assert lock.isHeldByCurrentThread();
         E first = q.peek();
         return (first == null || first.getDelay(NANOSECONDS) > 0) ?
-                null : first;
+            null : first;
     }
 
     /**
@@ -349,7 +342,7 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
         lock.lock();
         try {
             int n = 0;
-            for (E e; (e = peekExpired()) != null; ) {
+            for (E e; (e = peekExpired()) != null;) {
                 c.add(e);       // In this order, in case add() throws.
                 q.poll();
                 ++n;
@@ -377,7 +370,7 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
         lock.lock();
         try {
             int n = 0;
-            for (E e; n < maxElements && (e = peekExpired()) != null; ) {
+            for (E e; n < maxElements && (e = peekExpired()) != null;) {
                 c.add(e);       // In this order, in case add() throws.
                 q.poll();
                 ++n;
@@ -459,7 +452,7 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
      * allocated array of {@code Delayed}:
      *
      * <pre> {@code Delayed[] a = q.toArray(new Delayed[0]);}</pre>
-     * <p>
+     *
      * Note that {@code toArray(new Object[0])} is identical in function to
      * {@code toArray()}.
      *
@@ -467,9 +460,9 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
      *          be stored, if it is big enough; otherwise, a new array of the
      *          same runtime type is allocated for this purpose
      * @return an array containing all of the elements in this queue
-     * @throws ArrayStoreException  if the runtime type of the specified array
-     *                              is not a supertype of the runtime type of every element in
-     *                              this queue
+     * @throws ArrayStoreException if the runtime type of the specified array
+     *         is not a supertype of the runtime type of every element in
+     *         this queue
      * @throws NullPointerException if the specified array is null
      */
     public <T> T[] toArray(T[] a) {
@@ -550,7 +543,7 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
             if (cursor >= array.length)
                 throw new NoSuchElementException();
             lastRet = cursor;
-            return (E) array[cursor++];
+            return (E)array[cursor++];
         }
 
         public void remove() {

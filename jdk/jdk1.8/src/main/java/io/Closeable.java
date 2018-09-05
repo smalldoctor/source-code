@@ -1,27 +1,53 @@
-package java.io;
-
-/**
- * @Author: xuecy
- * @Date: 2016/10/15
- * @RealUser: Chunyang Xue
- * @Time: 11:20
- * @Package: rmxue.java.io
- * @Email: xuecy@live.com
+/*
+ * Copyright (c) 2003, 2013, Oracle and/or its affiliates. All rights reserved.
+ * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
  */
+
+package java.io;
 
 import java.io.IOException;
 
 /**
- * 实现此接口代表data的source和destination是可以被关闭。
- * 对于拥有资源的对象调用close方法进行资源的释放
- * since 1.5
+ * A {@code Closeable} is a source or destination of data that can be closed.
+ * The close method is invoked to release resources that the object is
+ * holding (such as open files).
+ *
+ * @since 1.5
  */
-@SuppressWarnings("ALL")
 public interface Closeable extends AutoCloseable {
+
     /**
-     * 如果某个资源已经关闭,调用此方法应该不要产生任何影响,即幂等方法
+     * Closes this stream and releases any system resources associated
+     * with it. If the stream is already closed then invoking this
+     * method has no effect.
      *
-     * @throws 如果发生IO错误,则抛出异常
-     * */
+     * <p> As noted in {@link AutoCloseable#close()}, cases where the
+     * close may fail require careful attention. It is strongly advised
+     * to relinquish the underlying resources and to internally
+     * <em>mark</em> the {@code Closeable} as closed, prior to throwing
+     * the {@code IOException}.
+     *
+     * @throws IOException if an I/O error occurs
+     */
     public void close() throws IOException;
 }

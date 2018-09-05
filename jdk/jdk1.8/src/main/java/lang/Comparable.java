@@ -32,12 +32,20 @@ import java.util.*;
  * ordering</i>, and the class's <tt>compareTo</tt> method is referred to as
  * its <i>natural comparison method</i>.<p>
  *
- * 实现Comparable接口的类的集合和数组可以通过调用集合或者数组的sort方法对集合和数组进行
- * 排序。实现Comparable的类实例可以作为SortedMap的key或者SortedSet中，无需单独指定
- * Comparator。
+ * Lists (and arrays) of objects that implement this interface can be sorted
+ * automatically by {@link Collections#sort(List) Collections.sort} (and
+ * {@link Arrays#sort(Object[]) Arrays.sort}).  Objects that implement this
+ * interface can be used as keys in a {@linkplain SortedMap sorted map} or as
+ * elements in a {@linkplain SortedSet sorted set}, without the need to
+ * specify a {@linkplain Comparator comparator}.<p>
  *
- * 对象的自然顺序中相等是指两个实例的e1.compareTo(e2)==0且e1.equals(e2)。null不是任何类的实例
- * 即使e.equals(null)返回是false，e.compareTo(null)必须抛出NullPointerException。
+ * The natural ordering for a class <tt>C</tt> is said to be <i>consistent
+ * with equals</i> if and only if <tt>e1.compareTo(e2) == 0</tt> has
+ * the same boolean value as <tt>e1.equals(e2)</tt> for every
+ * <tt>e1</tt> and <tt>e2</tt> of class <tt>C</tt>.  Note that <tt>null</tt>
+ * is not an instance of any class, and <tt>e.compareTo(null)</tt> should
+ * throw a <tt>NullPointerException</tt> even though <tt>e.equals(null)</tt>
+ * returns <tt>false</tt>.<p>
  *
  * It is strongly recommended (though not required) that natural orderings be
  * consistent with equals.  This is so because sorted sets (and sorted maps)

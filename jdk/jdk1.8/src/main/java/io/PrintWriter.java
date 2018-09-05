@@ -138,8 +138,10 @@ public class PrintWriter extends Writer {
      * default character encoding.
      *
      * @param  out        An output stream
-     * @param  autoFlush  boolean类型的值；如果是true，printf，println,format方法调用之后会刷新输出流缓存
-     *                    如果没有设置，则输出的信息不会被立即被输出，只会被存在buffer中
+     * @param  autoFlush  A boolean; if true, the <tt>println</tt>,
+     *                    <tt>printf</tt>, or <tt>format</tt> methods will
+     *                    flush the output buffer
+     *
      * @see java.io.OutputStreamWriter#OutputStreamWriter(java.io.OutputStream)
      */
     public PrintWriter(OutputStream out, boolean autoFlush) {

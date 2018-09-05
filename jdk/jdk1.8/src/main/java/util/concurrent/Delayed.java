@@ -1,11 +1,50 @@
+/*
+ * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ */
+
+/*
+ *
+ *
+ *
+ *
+ *
+ * Written by Doug Lea with assistance from members of JCP JSR-166
+ * Expert Group and released to the public domain, as explained at
+ * http://creativecommons.org/publicdomain/zero/1.0/
+ */
+
 package java.util.concurrent;
 
 /**
- * Mixin：
- * 用于解决多层次继承的问题；通过多重继承的方式，为某个类增加某种能力，而不是通过多层次的继承的方式；
- * 在JAVA中是不能多重继承的，因此通过接口的方式;
- * <p>
- * Delayed用于表示这个对象必须延迟执行；
+ * A mix-in style interface for marking objects that should be
+ * acted upon after a given delay.
+ *
+ * <p>An implementation of this interface must define a
+ * {@code compareTo} method that provides an ordering consistent with
+ * its {@code getDelay} method.
+ *
+ * @since 1.5
+ * @author Doug Lea
  */
 public interface Delayed extends Comparable<Delayed> {
 
@@ -19,4 +58,3 @@ public interface Delayed extends Comparable<Delayed> {
      */
     long getDelay(TimeUnit unit);
 }
-

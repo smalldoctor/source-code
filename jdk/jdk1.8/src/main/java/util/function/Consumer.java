@@ -30,12 +30,12 @@ import java.util.Objects;
  * Represents an operation that accepts a single input argument and returns no
  * result. Unlike most other functional interfaces, {@code Consumer} is expected
  * to operate via side-effects.
- * 用来表示通用的只有一个参数且无返回值的谓词，即函数描述符
  *
  * <p>This is a <a href="package-summary.html">functional interface</a>
  * whose functional method is {@link #accept(Object)}.
  *
  * @param <T> the type of the input to the operation
+ *
  * @since 1.8
  */
 @FunctionalInterface
@@ -62,9 +62,6 @@ public interface Consumer<T> {
      */
     default Consumer<T> andThen(Consumer<? super T> after) {
         Objects.requireNonNull(after);
-        return (T t) -> {
-            accept(t);
-            after.accept(t);
-        };
+        return (T t) -> { accept(t); after.accept(t); };
     }
 }

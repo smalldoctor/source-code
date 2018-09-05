@@ -230,8 +230,8 @@ abstract class AbstractPipeline<E_IN, E_OUT, S extends BaseStream<E_OUT, S>>
         linkedOrConsumed = true;
 
         return isParallel()
-                ? terminalOp.evaluateParallel(this, sourceSpliterator(terminalOp.getOpFlags()))
-                : terminalOp.evaluateSequential(this, sourceSpliterator(terminalOp.getOpFlags()));
+               ? terminalOp.evaluateParallel(this, sourceSpliterator(terminalOp.getOpFlags()))
+               : terminalOp.evaluateSequential(this, sourceSpliterator(terminalOp.getOpFlags()));
     }
 
     /**
@@ -308,7 +308,6 @@ abstract class AbstractPipeline<E_IN, E_OUT, S extends BaseStream<E_OUT, S>>
     @Override
     @SuppressWarnings("unchecked")
     public final S parallel() {
-//        只是设置是否parallel的标志
         sourceStage.parallel = true;
         return (S) this;
     }
@@ -331,8 +330,8 @@ abstract class AbstractPipeline<E_IN, E_OUT, S extends BaseStream<E_OUT, S>>
         Runnable existingHandler = sourceStage.sourceCloseAction;
         sourceStage.sourceCloseAction =
                 (existingHandler == null)
-                        ? closeHandler
-                        : Streams.composeWithExceptions(existingHandler, closeHandler);
+                ? closeHandler
+                : Streams.composeWithExceptions(existingHandler, closeHandler);
         return (S) this;
     }
 

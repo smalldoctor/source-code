@@ -288,13 +288,10 @@ import java.util.function.LongConsumer;
  * is set to {@code true} then diagnostic warnings are reported if boxing of
  * primitive values occur when operating on primitive subtype specializations.
  *
- * 迭代的元素类型
  * @param <T> the type of elements returned by this Spliterator
  *
  * @see Collection
  * @since 1.8
- *
- * 可分迭代器
  */
 public interface Spliterator<T> {
     /**
@@ -303,10 +300,6 @@ public interface Spliterator<T> {
      * Spliterator is {@link #ORDERED} the action is performed on the
      * next element in encounter order.  Exceptions thrown by the
      * action are relayed to the caller.
-     *
-     * 对当前元素执行action，如果元素存在，返回true；否则返回false;
-     * Spliterator在实现时会自己实现对流中数据的持有，并且实现每个元素迭代获取的
-     *
      *
      * @param action The action
      * @return {@code false} if no remaining elements existed
@@ -321,8 +314,6 @@ public interface Spliterator<T> {
      * throws an exception.  If this Spliterator is {@link #ORDERED}, actions
      * are performed in encounter order.  Exceptions thrown by the action
      * are relayed to the caller.
-     *
-     * 通过此方法遍历流中的元素，并且执行action；
      *
      * @implSpec
      * The default implementation repeatedly invokes {@link #tryAdvance} until
@@ -372,8 +363,6 @@ public interface Spliterator<T> {
      * deviations in balance and/or overly inefficient {@code
      * trySplit} mechanics typically result in poor parallel
      * performance.
-     *
-     * trySplit方法被会ForkJoinTask的compute调用，用来进行任务的拆分
      *
      * @return a {@code Spliterator} covering some portion of the
      * elements, or {@code null} if this spliterator cannot be split
@@ -683,7 +672,7 @@ public interface Spliterator<T> {
             else {
                 if (Tripwire.ENABLED)
                     Tripwire.trip(getClass(),
-                            "{0} calling Spliterator.OfInt.tryAdvance((IntConsumer) action::accept)");
+                                  "{0} calling Spliterator.OfInt.tryAdvance((IntConsumer) action::accept)");
                 return tryAdvance((IntConsumer) action::accept);
             }
         }
@@ -706,7 +695,7 @@ public interface Spliterator<T> {
             else {
                 if (Tripwire.ENABLED)
                     Tripwire.trip(getClass(),
-                            "{0} calling Spliterator.OfInt.forEachRemaining((IntConsumer) action::accept)");
+                                  "{0} calling Spliterator.OfInt.forEachRemaining((IntConsumer) action::accept)");
                 forEachRemaining((IntConsumer) action::accept);
             }
         }
@@ -747,7 +736,7 @@ public interface Spliterator<T> {
             else {
                 if (Tripwire.ENABLED)
                     Tripwire.trip(getClass(),
-                            "{0} calling Spliterator.OfLong.tryAdvance((LongConsumer) action::accept)");
+                                  "{0} calling Spliterator.OfLong.tryAdvance((LongConsumer) action::accept)");
                 return tryAdvance((LongConsumer) action::accept);
             }
         }
@@ -770,7 +759,7 @@ public interface Spliterator<T> {
             else {
                 if (Tripwire.ENABLED)
                     Tripwire.trip(getClass(),
-                            "{0} calling Spliterator.OfLong.forEachRemaining((LongConsumer) action::accept)");
+                                  "{0} calling Spliterator.OfLong.forEachRemaining((LongConsumer) action::accept)");
                 forEachRemaining((LongConsumer) action::accept);
             }
         }
@@ -811,7 +800,7 @@ public interface Spliterator<T> {
             else {
                 if (Tripwire.ENABLED)
                     Tripwire.trip(getClass(),
-                            "{0} calling Spliterator.OfDouble.tryAdvance((DoubleConsumer) action::accept)");
+                                  "{0} calling Spliterator.OfDouble.tryAdvance((DoubleConsumer) action::accept)");
                 return tryAdvance((DoubleConsumer) action::accept);
             }
         }
@@ -835,7 +824,7 @@ public interface Spliterator<T> {
             else {
                 if (Tripwire.ENABLED)
                     Tripwire.trip(getClass(),
-                            "{0} calling Spliterator.OfDouble.forEachRemaining((DoubleConsumer) action::accept)");
+                                  "{0} calling Spliterator.OfDouble.forEachRemaining((DoubleConsumer) action::accept)");
                 forEachRemaining((DoubleConsumer) action::accept);
             }
         }

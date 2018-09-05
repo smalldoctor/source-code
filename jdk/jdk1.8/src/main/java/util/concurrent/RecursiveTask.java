@@ -76,14 +76,6 @@ public abstract class RecursiveTask<V> extends ForkJoinTask<V> {
     /**
      * The main computation performed by this task.
      * @return the result of the computation
-     *
-     * if (任务足够小或不可分) {
-     *  顺序计算该任务
-     * } else {
-     *      将任务分成两个子任务
-     *      递归调用本方法，拆分每个子任务，等待所有子任务完成
-     *      合并每个子任务的结果
-     * }
      */
     protected abstract V compute();
 

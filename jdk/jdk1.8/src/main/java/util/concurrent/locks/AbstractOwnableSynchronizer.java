@@ -1,47 +1,86 @@
+/*
+ * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ */
+
+/*
+ *
+ *
+ *
+ *
+ *
+ * Written by Doug Lea with assistance from members of JCP JSR-166
+ * Expert Group and released to the public domain, as explained at
+ * http://creativecommons.org/publicdomain/zero/1.0/
+ */
+
 package java.util.concurrent.locks;
 
 /**
- * @Author: xuecy
- * @Date: 2016/10/19
- * @RealUser: Chunyang Xue
- * @Time: 20:24
- * @Package: rmxue.java.util.concurrent.locks
- * @Email: xuecy@live.com
- */
-
-/**
- * Synchronizer可以被用于一个线程排他拥有。它是锁实现的基础。
- * 被线程独占方式拥有的同步器。
+ * A synchronizer that may be exclusively owned by a thread.  This
+ * class provides a basis for creating locks and related synchronizers
+ * that may entail a notion of ownership.  The
+ * {@code AbstractOwnableSynchronizer} class itself does not manage or
+ * use this information. However, subclasses and tools may use
+ * appropriately maintained values to help control and monitor access
+ * and provide diagnostics.
  *
  * @since 1.6
+ * @author Doug Lea
  */
-public abstract class AbstractOwnableSynchronizer implements java.io.Serializable {
+public abstract class AbstractOwnableSynchronizer
+    implements java.io.Serializable {
+
+    /** Use serial ID even though all fields transient. */
     private static final long serialVersionUID = 3737899427754241961L;
 
     /**
-     * 空的构造器,供子类调用
+     * Empty constructor for use by subclasses.
      */
-    protected AbstractOwnableSynchronizer() {
-    }
+    protected AbstractOwnableSynchronizer() { }
 
-    /*排他模式Synchronizer的当前拥有者*/
+    /**
+     * The current owner of exclusive mode synchronization.
+     */
     private transient Thread exclusiveOwnerThread;
 
     /**
-     * 获取独占方式的同步器的拥有者线程;这个方法不用进行同步控制;
-     *
-     * @return
+     * Sets the thread that currently owns exclusive access.
+     * A {@code null} argument indicates that no thread owns access.
+     * This method does not otherwise impose any synchronization or
+     * {@code volatile} field accesses.
+     * @param thread the owner thread
      */
-    public final Thread getExclusiveOwnerThread() {
-        return exclusiveOwnerThread;
+    protected final void setExclusiveOwnerThread(Thread thread) {
+        exclusiveOwnerThread = thread;
     }
 
     /**
-     * 设置独占方式的同步器的拥有者线程;这个方法不用进行同步控制;
-     *
-     * @param exclusiveOwnerThread
+     * Returns the thread last set by {@code setExclusiveOwnerThread},
+     * or {@code null} if never set.  This method does not otherwise
+     * impose any synchronization or {@code volatile} field accesses.
+     * @return the owner thread
      */
-    public final void setExclusiveOwnerThread(Thread exclusiveOwnerThread) {
-        this.exclusiveOwnerThread = exclusiveOwnerThread;
+    protected final Thread getExclusiveOwnerThread() {
+        return exclusiveOwnerThread;
     }
 }

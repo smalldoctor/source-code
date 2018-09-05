@@ -28,12 +28,12 @@ import java.util.Objects;
 
 /**
  * Represents a predicate (boolean-valued function) of one argument.
- * 用来表示通用的只有一个参数且返回一个boolean值的谓词，即函数描述符
  *
  * <p>This is a <a href="package-summary.html">functional interface</a>
  * whose functional method is {@link #test(Object)}.
  *
  * @param <T> the type of the input to the predicate
+ *
  * @since 1.8
  */
 @FunctionalInterface
@@ -105,9 +105,9 @@ public interface Predicate<T> {
      * Returns a predicate that tests if two arguments are equal according
      * to {@link Objects#equals(Object, Object)}.
      *
-     * @param <T>       the type of arguments to the predicate
+     * @param <T> the type of arguments to the predicate
      * @param targetRef the object reference with which to compare for equality,
-     *                  which may be {@code null}
+     *               which may be {@code null}
      * @return a predicate that tests if two arguments are equal according
      * to {@link Objects#equals(Object, Object)}
      */

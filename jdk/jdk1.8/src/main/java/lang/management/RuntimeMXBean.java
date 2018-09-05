@@ -26,9 +26,16 @@
 package java.lang.management;
 
 /**
- * Java虚拟机运行时系统的管理接口。每个虚拟机都有一个此接口的单实例。这个接口的实例是一个MXBean，
- * 可以通过ManagementFactory.getRuntimeMXBean或者从ManagementFactory.getPlatformMBeanServer
- * 获取到的MBeanServer中获取到。
+ * The management interface for the runtime system of
+ * the Java virtual machine.
+ *
+ * <p> A Java virtual machine has a single instance of the implementation
+ * class of this interface.  This instance implementing this interface is
+ * an <a href="ManagementFactory.html#MXBean">MXBean</a>
+ * that can be obtained by calling
+ * the {@link ManagementFactory#getRuntimeMXBean} method or
+ * from the {@link ManagementFactory#getPlatformMBeanServer
+ * platform <tt>MBeanServer</tt>} method.
  *
  * <p>The <tt>ObjectName</tt> for uniquely identifying the MXBean for
  * the runtime system within an MBeanServer is:
