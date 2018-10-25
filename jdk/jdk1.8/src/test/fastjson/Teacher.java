@@ -1,6 +1,7 @@
 package fastjson;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Copyright: Copyright (c) 2018 Asiainfo
@@ -22,10 +23,19 @@ public class Teacher {
     private Integer teacherAge;
     private Course course;
     private List<Student> students;
+    private Map<String,Student> mapping;
     private Integer test1;
 
     public Integer getTest1() {
         return test1;
+    }
+
+    public Map<String, Student> getMapping() {
+        return mapping;
+    }
+
+    public void setMapping(Map<String, Student> mapping) {
+        this.mapping = mapping;
     }
 
     public void setTest1(Integer test1) {
