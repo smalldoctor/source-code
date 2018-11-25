@@ -459,6 +459,8 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * also hold mainLock on shutdown and shutdownNow, for the sake of
      * ensuring workers set is stable while separately checking
      * permission to interrupt and actually interrupting.
+     *
+     * 用于控制对workers set的访问，控制并发
      */
     private final ReentrantLock mainLock = new ReentrantLock();
 
@@ -896,6 +898,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * maximumPoolSize. (A boolean indicator is used here rather than a
      * value to ensure reads of fresh values after checking other pool
      * state).
+     * 用来区分是在核心线程时期还是最大线程时期
      * @return true if successful
      */
     private boolean addWorker(Runnable firstTask, boolean core) {
@@ -905,6 +908,12 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
             int rs = runStateOf(c);
 
             // Check if queue empty only if necessary.
+            /**
+             * 1. rs是大于等于SHUTDOWN说明已经开始拒绝接受新的任务
+             * 2. rs如果是SHUTDOWN状态还需要继续处理已经接受的任务【大于SHUTDOWN的状态不处理】，
+             * firstTask == null说明不是接受新的任务场景【如果是新接受的任务，在SHUTDOWN状态下是拒绝的】，
+             * ! workQueue.isEmpty()说明内部还存在未处理的任务，此时是可以新增worker进行已经接受任务的处理
+             * */
             if (rs >= SHUTDOWN &&
                 ! (rs == SHUTDOWN &&
                    firstTask == null &&
@@ -933,6 +942,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
             final Thread t = w.thread;
             if (t != null) {
                 final ReentrantLock mainLock = this.mainLock;
+//                存在并发访问worker set集合
                 mainLock.lock();
                 try {
                     // Recheck while holding lock.
@@ -1350,6 +1360,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
          * task.  The call to addWorker atomically checks runState and
          * workerCount, and so prevents false alarms that would add
          * threads when it shouldn't, by returning false.
+         * 线程池并非在启动时就创建核心数量的线程，而是逐步创建
          *
          * 2. If a task can be successfully queued, then we still need
          * to double-check whether we should have added a thread
