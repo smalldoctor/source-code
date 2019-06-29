@@ -208,7 +208,7 @@ public interface BlockingQueue<E> extends Queue<E> {
      *
      * 添加元素加入到队列中；
      * 与add的区别：
-     *  1. add在队列满时跑出异常
+     *  1. add在队列满时抛出异常
      *  2. offer在队列满时返回false，而不是抛出异常
      *
      * @param e the element to add
