@@ -224,6 +224,8 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
    * asked, and when exiting threads are still performing
    * bookkeeping before terminating. The user-visible pool size is
    * reported as the current size of the workers set.
+   * workerCount 可能与实际live的线程不等，因为可能线程工厂创建线程失败。
+   * 实际大小是通过worker set获取。
    *
    * The runState provides the main lifecycle control, taking on values:
    *
@@ -550,10 +552,12 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
       return true;
     }
 
+//    挂起当前线程
     public void lock() {
       acquire(1);
     }
 
+    // 不挂起当前线程
     public boolean tryLock() {
       return tryAcquire(1);
     }
@@ -607,6 +611,9 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
    * termination possible -- reducing worker count or removing tasks
    * from the queue during shutdown. The method is non-private to
    * allow access from ScheduledThreadPoolExecutor.
+   * 如下场景需要调用terminate：
+   * 1。 减少worker
+   * 2。 shutdown状态，移除任务
    */
   final void tryTerminate() {
     for (; ; ) {
@@ -620,7 +627,10 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         interruptIdleWorkers(ONLY_ONE);
         return;
       }
-
+      /*
+       * 1。 shutdown： pool queue 空
+       * 2。 stop： pool 空
+       * */
       final ReentrantLock mainLock = this.mainLock;
       mainLock.lock();
       try {
@@ -830,6 +840,8 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
        * 2. rs如果是SHUTDOWN状态还需要继续处理已经接受的任务【大于SHUTDOWN的状态不处理】，
        * firstTask == null说明不是接受新的任务场景【如果是新接受的任务，在SHUTDOWN状态下是拒绝的】，
        * ! workQueue.isEmpty()说明内部还存在未处理的任务，此时是可以新增worker进行已经接受任务的处理
+       *
+       * shutdown，stop，tidying，terminate 四种状态下，只有shutdown且不是新接受任务，且队列不为空时，可以增加新的线程处理任务；其他都不可以增加线程
        * */
       if (rs >= SHUTDOWN &&
           !(rs == SHUTDOWN &&
@@ -893,6 +905,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         }
       }
     } finally {
+//      如果worker添加失败
       if (!workerStarted) {
         addWorkerFailed(w);
       }
@@ -906,6 +919,9 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
    * - decrements worker count
    * - rechecks for termination, in case the existence of this
    * worker was holding up termination
+   * 1. 移除worker
+   * 2. count-1
+   * 3. terminate 线程池
    */
   private void addWorkerFailed(Worker w) {
     final ReentrantLock mainLock = this.mainLock;
@@ -979,7 +995,9 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
    * {@code allowCoreThreadTimeOut || workerCount > corePoolSize})
    * both before and after the timed wait, and if the queue is
    * non-empty, this worker is not the last thread in the pool.
-   *
+   * 1。shutdown queue为空 或者 rs》=stop
+   * 2。如果大于最大线程数【因为可以动态修改线程数】或者{@code allowCoreThreadTimeOut || workerCount > corePoolSize}
+   * ，此时队列是空或者不是最后一个worker，就返回null
    * @return task, or null if the worker must exit, in which case
    * workerCount is decremented
    */
@@ -1071,6 +1089,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     Runnable task = w.firstTask;
     w.firstTask = null;
     w.unlock(); // allow interrupts
+//    用于是否正常退出，如果非正常退出需要wc-1；正常退出时，已经昨晚wc-1
     boolean completedAbruptly = true;
     try {
       while (task != null || (task = getTask()) != null) {
@@ -1110,6 +1129,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
       }
       completedAbruptly = false;
     } finally {
+//      没有任务时，处理worker的退出
       processWorkerExit(w, completedAbruptly);
     }
   }
@@ -1313,19 +1333,23 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * and so reject the task.
      */
     int c = ctl.get();
+//    小于core，增加worker
     if (workerCountOf(c) < corePoolSize) {
       if (addWorker(command, true)) {
         return;
       }
       c = ctl.get();
     }
+    // 大于core，则加入queue；
     if (isRunning(c) && workQueue.offer(command)) {
+//      因为在加入队列的时候，执行器可能已经shutdown或者所有线程已经died；
       int recheck = ctl.get();
       if (!isRunning(recheck) && remove(command)) {
         reject(command);
       } else if (workerCountOf(recheck) == 0) {
         addWorker(null, false);
       }
+//      加入queue失败，且小于max，则增加线程；否则reject
     } else if (!addWorker(command, false)) {
       reject(command);
     }
