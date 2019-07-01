@@ -859,6 +859,8 @@ public class ScheduledThreadPoolExecutor
          * which case we fall back to linear search. (We expect that
          * most tasks will not be decorated, and that the faster cases
          * will be much more common.)
+         * 任务索引用于快速移除，但是因为队列中的任务可能被decorated，即有可能
+         * 没法使用索引，则编程线性查找，性能下降，所以不建议decorated
          *
          * All heap operations must record index changes -- mainly
          * within siftUp and siftDown. Upon removal, a task's
@@ -869,6 +871,7 @@ public class ScheduledThreadPoolExecutor
          */
 
         private static final int INITIAL_CAPACITY = 16;
+//        基于数组的堆排序
         private RunnableScheduledFuture<?>[] queue =
             new RunnableScheduledFuture<?>[INITIAL_CAPACITY];
         private final ReentrantLock lock = new ReentrantLock();
@@ -909,9 +912,12 @@ public class ScheduledThreadPoolExecutor
         /**
          * Sifts element added at bottom up to its heap-ordered spot.
          * Call only when holding lock.
+         * 自下向上堆化的过程
          */
         private void siftUp(int k, RunnableScheduledFuture<?> key) {
             while (k > 0) {
+//                数组第0个元素存放元素，父节点【i-1】/2；左节点2*i+1；右节点2*i+2
+//                如果第1个开始，【i】/2；左节点2*i；右节点2*i+1
                 int parent = (k - 1) >>> 1;
                 RunnableScheduledFuture<?> e = queue[parent];
                 if (key.compareTo(e) >= 0)
@@ -927,8 +933,10 @@ public class ScheduledThreadPoolExecutor
         /**
          * Sifts element added at top down to its heap-ordered spot.
          * Call only when holding lock.
+         * 自上而下的堆化过程
          */
         private void siftDown(int k, RunnableScheduledFuture<?> key) {
+//            i/2-1是叶子节点
             int half = size >>> 1;
             while (k < half) {
                 int child = (k << 1) + 1;
@@ -1000,7 +1008,11 @@ public class ScheduledThreadPoolExecutor
                 RunnableScheduledFuture<?> replacement = queue[s];
                 queue[s] = null;
                 if (s != i) {
+//                    用最后一个元素填充删除的元素，自上向下堆化
                     siftDown(i, replacement);
+//                    如果最后一个元素刚好放在删除的位置，说明下面都比它小，但是有可能它比父节点大，所以要自下
+//                    向上堆化。但是如果不是刚好放在删除的位置，则说明原来位置下面的元素比它大，而父节点比子节点
+//                    大，所以原来位置的父节点肯定比最后一个元素大，则不需要再自下向上。
                     if (queue[i] == replacement)
                         siftUp(i, replacement);
                 }
