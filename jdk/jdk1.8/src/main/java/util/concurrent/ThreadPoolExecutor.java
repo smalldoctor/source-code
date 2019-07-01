@@ -611,7 +611,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
    * termination possible -- reducing worker count or removing tasks
    * from the queue during shutdown. The method is non-private to
    * allow access from ScheduledThreadPoolExecutor.
-   * 如下场景需要调用terminate：
+   * 如下场景需要调用tryTerminate：
    * 1。 减少worker
    * 2。 shutdown状态，移除任务
    */
@@ -1581,6 +1581,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
   /**
    * Same as prestartCoreThread except arranges that at least one
    * thread is started even if corePoolSize is 0.
+   * 即使核心线程数为0也会尝试启动
    */
   void ensurePrestart() {
     int wc = workerCountOf(ctl.get());

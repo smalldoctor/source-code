@@ -62,6 +62,8 @@ import java.util.*;
  * this, set {@link #setRemoveOnCancelPolicy} to {@code true}, which
  * causes tasks to be immediately removed from the work queue at
  * time of cancellation.
+ * 默认情况下任务被cancel是不会自动从队列中移除的，直到延迟到期。可以
+ * {@link #setRemoveOnCancelPolicy} to {@code true}来实现cancel被立即移除。
  *
  * <p>Successive executions of a task scheduled via
  * {@code scheduleAtFixedRate} or
@@ -79,6 +81,11 @@ import java.util.*;
  * is almost never a good idea to set {@code corePoolSize} to zero or
  * use {@code allowCoreThreadTimeOut} because this may leave the pool
  * without threads to handle tasks once they become eligible to run.
+ * 避免{@code corePoolSize} to zero或者{@code allowCoreThreadTimeOut}，【keepalivetime是0】
+ * 因为调度队列中任务就绪之后，没有线程处理；
+ * 调度线程池是无界队列，且固定core线程数，所以 {@code maximumPoolSize}是无效的；
+ *
+ *
  *
  * <p><b>Extension notes:</b> This class overrides the
  * {@link ThreadPoolExecutor#execute(Runnable) execute} and
@@ -151,11 +158,13 @@ public class ScheduledThreadPoolExecutor
 
     /**
      * False if should cancel/suppress periodic tasks on shutdown.
+     * 在关闭时是否cancel周期任务
      */
     private volatile boolean continueExistingPeriodicTasksAfterShutdown;
 
     /**
      * False if should cancel non-periodic tasks on shutdown.
+     * 在关闭时是否执行延迟任务
      */
     private volatile boolean executeExistingDelayedTasksAfterShutdown = true;
 
@@ -180,10 +189,14 @@ public class ScheduledThreadPoolExecutor
     private class ScheduledFutureTask<V>
             extends FutureTask<V> implements RunnableScheduledFuture<V> {
 
-        /** Sequence number to break ties FIFO */
+        /** Sequence number to break ties FIFO
+         * 任务序号
+         * */
         private final long sequenceNumber;
 
-        /** The time the task is enabled to execute in nanoTime units */
+        /** The time the task is enabled to execute in nanoTime units
+         * 任务延迟时间，纳秒级
+         * */
         private long time;
 
         /**
@@ -191,14 +204,21 @@ public class ScheduledThreadPoolExecutor
          * value indicates fixed-rate execution.  A negative value
          * indicates fixed-delay execution.  A value of 0 indicates a
          * non-repeating task.
+         * period用来表示是重复任务属性；大于0则是fixed-rate；
+         * 小于0 fixed-delay；等于0非周期任务
          */
         private final long period;
 
-        /** The actual task to be re-enqueued by reExecutePeriodic */
+        /** The actual task to be re-enqueued by reExecutePeriodic
+         *  周期任务的decorate任务；
+         *  如果用户对任务进行decorate，则加入队列是这个新的task；
+         *  需要注意在decorate时，相关方法的override；
+         * */
         RunnableScheduledFuture<V> outerTask = this;
 
         /**
          * Index into delay queue, to support faster cancellation.
+         * 用于队列中的序号，用于快速取消
          */
         int heapIndex;
 
@@ -266,6 +286,8 @@ public class ScheduledThreadPoolExecutor
 
         /**
          * Sets the next time to run for a periodic task.
+         * 如果大于0，则是固定频率，则在上次time+period；
+         * 如果小于0，则是固定延迟，则在当前时间+period；
          */
         private void setNextRunTime() {
             long p = period;
@@ -302,6 +324,11 @@ public class ScheduledThreadPoolExecutor
      * Returns true if can run a task given current run state
      * and run-after-shutdown parameters.
      *
+     * 如果执行器是running，则是running；
+     * 如果执行器是Shutdown，则需要判断是否周期任务：
+     * 1。如果周期任务，默认shutdown是cancel任务
+     * 2。如果非周期任务，默认shutdown是执行任务
+     *
      * @param periodic true if this task periodic, false if delayed
      */
     boolean canRunInCurrentRunState(boolean periodic) {
@@ -322,15 +349,19 @@ public class ScheduledThreadPoolExecutor
      * @param task the task
      */
     private void delayedExecute(RunnableScheduledFuture<?> task) {
+      // 先判断执行器状态是否是shutdown，如果是reject
         if (isShutdown())
             reject(task);
         else {
+          // 入队，入队失败抛出异常
             super.getQueue().add(task);
+            // 判断是否需要取消任务，先从【队列remove，再cancel】
             if (isShutdown() &&
                 !canRunInCurrentRunState(task.isPeriodic()) &&
                 remove(task))
                 task.cancel(false);
             else
+              // 启动线程
                 ensurePrestart();
         }
     }
@@ -354,6 +385,8 @@ public class ScheduledThreadPoolExecutor
     /**
      * Cancels and clears the queue of all tasks that should not be run
      * due to shutdown policy.  Invoked within super.shutdown.
+     * 调度线程执行器，在关闭时，需要判断周期任务和非周期任务的不同处理策略；
+     * 需要调用onShutdown钩子方法。
      */
     @Override void onShutdown() {
         BlockingQueue<Runnable> q = super.getQueue();
@@ -389,7 +422,7 @@ public class ScheduledThreadPoolExecutor
      * This method can be used to override the concrete
      * class used for managing internal tasks.
      * The default implementation simply returns the given task.
-     *
+     * 用于自己包装task，但是自定义task必须实现RunnableScheduledFuture
      * @param runnable the submitted Runnable
      * @param task the task created to execute the runnable
      * @param <V> the type of the task's result
@@ -605,12 +638,15 @@ public class ScheduledThreadPoolExecutor
      * Note that inspections of the queue and of the list returned by
      * {@code shutdownNow} will access the zero-delayed
      * {@link ScheduledFuture}, not the {@code command} itself.
+     * 相当于执行schedule(command, 0, anyUnit)方法，即立即执行任务。
      *
      * <p>A consequence of the use of {@code ScheduledFuture} objects is
      * that {@link ThreadPoolExecutor#afterExecute afterExecute} is always
      * called with a null second {@code Throwable} argument, even if the
      * {@code command} terminated abruptly.  Instead, the {@code Throwable}
      * thrown by such a task can be obtained via {@link Future#get}.
+     * {@link ThreadPoolExecutor#afterExecute afterExecute}调用时
+     *  a null second {@code Throwable} argument第二参数是空的
      *
      * @throws RejectedExecutionException at discretion of
      *         {@code RejectedExecutionHandler}, if the task
