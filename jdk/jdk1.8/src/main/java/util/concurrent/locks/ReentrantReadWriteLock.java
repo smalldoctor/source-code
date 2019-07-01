@@ -64,6 +64,8 @@ import java.util.Collection;
  * be assigned the write lock, or if there is a group of reader threads
  * waiting longer than all waiting writer threads, that group will be
  * assigned the read lock.
+ * 公平锁被释放时最长等待写锁的会被分配，或者如果读线程组比所有等待写的线程时间长，
+ * 则读锁被分配
  *
  * <p>A thread that tries to acquire a fair read lock (non-reentrantly)
  * will block if either the write lock is held, or there is a waiting
@@ -95,12 +97,14 @@ import java.util.Collection;
  * when write locks are held during calls or callbacks to methods that
  * perform reads under read locks.  If a reader tries to acquire the
  * write lock it will never succeed.
+ * 写线程可以获取读锁，但是读线程不能获取写锁。读锁与写锁获取时，需要互相判断对方的状态；
  *
  * <li><b>Lock downgrading</b>
  * <p>Reentrancy also allows downgrading from the write lock to a read lock,
  * by acquiring the write lock, then the read lock and then releasing the
  * write lock. However, upgrading from a read lock to the write lock is
  * <b>not</b> possible.
+ * 在同时拥有写锁，读锁，可以通过释放写锁，进行锁降级；但是读锁无法升级写锁。
  *
  * <li><b>Interruption of lock acquisition</b>
  * <p>The read lock and write lock both support interruption during lock
@@ -112,6 +116,7 @@ import java.util.Collection;
  * {@link Condition} implementation provided by
  * {@link ReentrantLock#newCondition} does for {@link ReentrantLock}.
  * This {@link Condition} can, of course, only be used with the write lock.
+ * 写锁支持Condition；读锁不支持Condition。
  *
  * <p>The read lock does not support a {@link Condition} and
  * {@code readLock().newCondition()} throws
@@ -259,6 +264,9 @@ public class ReentrantReadWriteLock
          * and the upper the shared (reader) hold count.
          */
 
+        /**
+         *  高位是read锁，低位是write锁
+         */
         static final int SHARED_SHIFT   = 16;
         static final int SHARED_UNIT    = (1 << SHARED_SHIFT);
         static final int MAX_COUNT      = (1 << SHARED_SHIFT) - 1;
@@ -272,6 +280,7 @@ public class ReentrantReadWriteLock
         /**
          * A counter for per-thread read hold counts.
          * Maintained as a ThreadLocal; cached in cachedHoldCounter
+         * 存放当前线程持有read锁的次数。
          */
         static final class HoldCounter {
             int count = 0;
@@ -367,6 +376,7 @@ public class ReentrantReadWriteLock
          */
 
         protected final boolean tryRelease(int releases) {
+//            判断是否互斥状态
             if (!isHeldExclusively())
                 throw new IllegalMonitorStateException();
             int nextc = getState() - releases;
@@ -392,8 +402,10 @@ public class ReentrantReadWriteLock
             Thread current = Thread.currentThread();
             int c = getState();
             int w = exclusiveCount(c);
+//            写锁获取需要判断读锁状态
             if (c != 0) {
                 // (Note: if c != 0 and w == 0 then shared count != 0)
+//                读锁状态：写锁未被获取，则不能升级，因此返回false；写锁也被获取，只能同一个线程reentran
                 if (w == 0 || current != getExclusiveOwnerThread())
                     return false;
                 if (w + exclusiveCount(acquires) > MAX_COUNT)
@@ -436,6 +448,7 @@ public class ReentrantReadWriteLock
                     // Releasing the read lock has no effect on readers,
                     // but it may allow waiting writers to proceed if
                     // both read and write locks are now free.
+//                    read锁释放，也是读锁和写锁都free的时候，才算做释放【读锁释放对读线程没有影响，但是对写线程有影响】
                     return nextc == 0;
             }
         }
@@ -463,6 +476,7 @@ public class ReentrantReadWriteLock
              */
             Thread current = Thread.currentThread();
             int c = getState();
+//            如果写锁被获取，但是不是同一个线程获取读锁，则失败
             if (exclusiveCount(c) != 0 &&
                 getExclusiveOwnerThread() != current)
                 return -1;
