@@ -1166,6 +1166,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
             return false;
         }
 
+//         从condition唤醒之后入aqs队列
         Node p = enq(node);
         int ws = p.waitStatus;
         /**
@@ -1215,6 +1216,8 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
      * 1. 因为Condition的使用是先获取当前Condition关联的Lock，所以不存在并发修改的问题，所以
      * 无须考虑复杂的并发情景，所以可以简化实现；
      * 2. 等待锁的Sync队列和Condition的队列是不同的队列;
+     * 3。 AQS提供了一种机制，至于实现什么语义由具体的子类实现；如ReentrantLock的synchronize语义
+     * 由ReentrantLock自己保证。
      */
     public class ConditionObject implements Condition, Serializable {
         private static final long serialVersionUID = 1173984872572414699L;
@@ -1309,6 +1312,7 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
             Node node = addConditionWaiter();
 
             // 如果释放锁失败，则当前线程对应的Node会被设置为Cancelled;
+//            挂起之后，释放同步状态;如果尝试释放时，如果不是当前线程持有则抛出异常。
             int savedState = fullyRelease(node);
 
             /**
@@ -1486,7 +1490,9 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
         }
 
         /**
-         * 将线程从Condition的队列移动到Lock的队列
+         * 将线程从Condition的队列移动到Lock的队列；
+         * 通过isHeldExclusively()判断是否互斥持有状态；
+         * 互斥持有即持有锁【当前持有者是不是当前线程】，才可以进行唤醒condition的等待线程；
          */
         @Override
         public void signal() {
