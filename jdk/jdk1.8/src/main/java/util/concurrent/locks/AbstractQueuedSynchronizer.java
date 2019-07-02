@@ -902,7 +902,9 @@ public class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer
     /**
      * 释放：只是唤醒下个节点，然后节点自己尝试获取锁；
      * <p>
-     * 需要注意区分 调用（唤醒）线程和工作线程
+     * 需要注意区分 调用（唤醒）线程和工作线程;
+     * 对与共享模式，在自己被唤醒的同时，需要传递唤醒，因此需要同时唤醒下一个节点。
+     * 对于互斥模式，则不需要，因为每次都是head节点，unpark下个节点
      */
     protected void doReleaseShared() {
         for (; ; ) {
