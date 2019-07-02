@@ -44,6 +44,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * must occasionally wait for each other. The barrier is called
  * <em>cyclic</em> because it can be re-used after the waiting threads
  * are released.
+ * 用于一组线程之间互相等待的同步机制。CyclicBarriers可以重复使用
  *
  * <p>A {@code CyclicBarrier} supports an optional {@link Runnable} command
  * that is run once per barrier point, after the last thread in the party
@@ -130,6 +131,8 @@ import java.util.concurrent.locks.ReentrantLock;
  * actions that are part of the barrier action, which in turn
  * <i>happen-before</i> actions following a successful return from the
  * corresponding {@code await()} in other threads.
+ * {@code await()}之前的操作happen-before barrier action；barrier action
+ * happen-before {@code await()}返回之后的操作
  *
  * @since 1.5
  * @see CountDownLatch
@@ -147,6 +150,7 @@ public class CyclicBarrier {
      * and all the rest are either broken or tripped.
      * There need not be an active generation if there has been a break
      * but no subsequent reset.
+     * CyclicBarrier一次使用是一Generation
      */
     private static class Generation {
         boolean broken = false;
@@ -167,6 +171,7 @@ public class CyclicBarrier {
      * Number of parties still waiting. Counts down from parties to 0
      * on each generation.  It is reset to parties on each new
      * generation or when broken.
+     * 每次new或者broken generation，则重置
      */
     private int count;
 
@@ -175,6 +180,7 @@ public class CyclicBarrier {
      * Called only while holding lock.
      */
     private void nextGeneration() {
+//        生成new Generation时，会唤醒所有的wait线程
         // signal completion of last generation
         trip.signalAll();
         // set up next generation
@@ -185,6 +191,7 @@ public class CyclicBarrier {
     /**
      * Sets current barrier generation as broken and wakes up everyone.
      * Called only while holding lock.
+     * 破坏当前generation，唤醒所有的线程；
      */
     private void breakBarrier() {
         generation.broken = true;
@@ -206,6 +213,7 @@ public class CyclicBarrier {
             if (g.broken)
                 throw new BrokenBarrierException();
 
+//            如果当前线程被中断了，则会break barrier，然后抛出中断异常
             if (Thread.interrupted()) {
                 breakBarrier();
                 throw new InterruptedException();
@@ -226,6 +234,7 @@ public class CyclicBarrier {
                     nextGeneration();
                     return 0;
                 } finally {
+//                    runaction执行失败，会break barrier
                     if (!ranAction)
                         breakBarrier();
                 }
