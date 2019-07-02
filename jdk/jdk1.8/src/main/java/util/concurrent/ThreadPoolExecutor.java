@@ -487,6 +487,8 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
    * the thread actually starts running tasks, we initialize lock
    * state to a negative value, and clear it upon start (in
    * runWorker).
+   * QAS的实现，主要来维护中断控制的；倾向于中断正在等待任务的线程而不是
+   * 正在处理任务的线程。即中断空闲线程。
    */
   private final class Worker
       extends AbstractQueuedSynchronizer
@@ -1093,6 +1095,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     boolean completedAbruptly = true;
     try {
       while (task != null || (task = getTask()) != null) {
+//        处理任务，则不是空闲线程；
         w.lock();
         // If pool is stopping, ensure thread is interrupted;
         // if not, ensure thread is not interrupted.  This
