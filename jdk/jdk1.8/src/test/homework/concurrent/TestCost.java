@@ -125,4 +125,11 @@ public class TestCost {
         log.info("主线程用时：{}ms", endTime - startTime);
     }
 
+
+    @Test
+    public void testThreadLive(){
+        Thread thread = new Thread();
+        System.out.println(thread.isAlive());
+    }
+
 }

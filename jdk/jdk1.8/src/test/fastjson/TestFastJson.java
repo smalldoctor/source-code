@@ -35,7 +35,7 @@ public class TestFastJson {
      * 复杂json格式字符串与JavaBean_obj之间的转换
      */
     @Test
-    public  void testComplexJSONStrToJavaBean() {
+    public void testComplexJSONStrToJavaBean() {
 
         Teacher teacher = JSON.parseObject(COMPLEX_JSON_STR, new TypeReference<Teacher>() {
         });
@@ -47,6 +47,56 @@ public class TestFastJson {
         System.out.println(teacherName);
         System.out.println(teacherAge);
         System.out.println(teacher);
+
+
+    }
+
+    @Test
+    public void test() {
+//        System.out.println(fact(7));;
+        char char1[] = {'j', 'a', 'v', 'a'};
+        char char2[] = {'j', 'a', 'v', 'a', '1'};
+        String s1 = new String(char1);
+        String s2 = new String(char2, 0, 4);
+        System.out.println(s1.equals(s2));
+
+        System.out.println("=====");
+
+        StringBuffer buffer = new StringBuffer();
+        int value = 18;
+        do {
+            int temp = value & 0x07;
+            buffer.append(temp);
+        } while ((value >>>= 3) != 0);
+        System.out.println(buffer.reverse());
+
+        System.out.println("=====");
+
+        int a = 0;
+        outer:
+        for (int i = 0; i < 2; i++) {
+            for (int j = 0; j < 2; j++) {
+                if(j > i) {
+                    continue outer;
+                }
+                a++;
+            }
+        }
+        System.out.println(a);
+    }
+
+    public int fact(int n) {
+        if (n <= 0)
+            return 1;
+        else
+            return n * fact(n - 1);
+    }
+
+    @Test
+    public void test2(){
+        System.out.println(~0010101);
+        int  a = 25/3%3;
+        System.out.println(a);
 
 
     }

@@ -752,6 +752,8 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
 
     @SuppressWarnings("unchecked")
     static final <K,V> Node<K,V> tabAt(Node<K,V>[] tab, int i) {
+        // 从tab数组中获取一个引用，遵循Volatile语义
+        // 参数2是一个在tab中的偏移量，用来寻找目标对象
         return (Node<K,V>)U.getObjectVolatile(tab, ((long)i << ASHIFT) + ABASE);
     }
 
@@ -761,6 +763,8 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     }
 
     static final <K,V> void setTabAt(Node<K,V>[] tab, int i, Node<K,V> v) {
+        // 设置tab数组中位于参数2偏移量位置的值，遵循Volatile语义
+//        tab本身是volatile，但是tab的元素不是volatile；
         U.putObjectVolatile(tab, ((long)i << ASHIFT) + ABASE, v);
     }
 
