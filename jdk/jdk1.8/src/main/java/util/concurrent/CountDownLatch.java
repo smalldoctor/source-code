@@ -39,6 +39,7 @@ import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 /**
  * A synchronization aid that allows one or more threads to wait until
  * a set of operations being performed in other threads completes.
+ * 一种同步机制，用于线程等待其他线程完成操作。
  *
  * <p>A {@code CountDownLatch} is initialized with a given <em>count</em>.
  * The {@link #await await} methods block until the current count reaches
@@ -47,6 +48,10 @@ import java.util.concurrent.locks.AbstractQueuedSynchronizer;
  * {@link #await await} return immediately.  This is a one-shot phenomenon
  * -- the count cannot be reset.  If you need a version that resets the
  * count, consider using a {@link CyclicBarrier}.
+ * {@code CountDownLatch}用于给定的count初始化。调用{@link #await await}的线程
+ * 将被阻塞，。{@link #countDown}将会使count达到0，当达到0的时候，所有因为 {@link #await await}
+ * 阻塞的线程将会被唤醒。{@code CountDownLatch}使一次性的，不会被重制。
+ * 如果需要具备多次使用，重置功能的使用{@link CyclicBarrier}.
  *
  * <p>A {@code CountDownLatch} is a versatile synchronization tool
  * and can be used for a number of purposes.  A
@@ -216,7 +221,7 @@ public class CountDownLatch {
     /**
      * Causes the current thread to wait until the latch has counted down to
      * zero, unless the thread is {@linkplain Thread#interrupt interrupted}.
-     * 当前线程会阻塞直到，latch的count变成0；
+     * 当前线程会阻塞直到，latch的count变成0；支持中断；
      *
      * <p>If the current count is zero then this method returns immediately.
      *
